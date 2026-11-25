@@ -327,6 +327,10 @@ def decide_quant_fallback(
             headline = "직전 손절 체결 직후 — 과매매 방지 1시간 쿨다운"
         elif has_position:
             headline = f"포지션 유지({exposure_pct:.1f}%) — 추세 지속 여부 점검"
+        elif score <= -20.0:
+            headline = f"하락 추세 우세(점수 {score:+.1f}) — 현금 관망 유지"
+        elif score >= 20.0:
+            headline = f"매수 임계치 대기(점수 {score:+.1f}) — 현금 관망 유지"
         else:
             headline = f"방향성 모호(점수 {score:+.1f}) — 현금 관망 유지"
 
@@ -342,6 +346,10 @@ def decide_quant_fallback(
     elif action == "SELL":
         action_sentence = (
             f"단기 하방 압력 또는 과매수 부담(점수 {score:+.1f}, RSI {rsi14:.1f})이 커져 보유 SOL의 {order_pct:.0f}%를 매도해 리스크를 관리합니다."
+        )
+    elif not has_position and score <= -20.0:
+        action_sentence = (
+            f"복합 정량 점수({score:+.1f}점)가 약세 구간에 머물러 성급한 역추세 진입을 피하고 전액 원화 관망을 유지합니다."
         )
     else:
         action_sentence = (
