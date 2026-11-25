@@ -159,7 +159,12 @@
     mddEl.textContent = fmtPct(s.max_drawdown_pct, false);
     mddEl.className = `num-display mini-val ${Number(s.max_drawdown_pct) < 0 ? "is-neg" : ""}`;
     $("kpi-winrate").textContent = s.win_rate_pct !== null ? `${s.win_rate_pct.toFixed(1)}% (${s.winning_trades}/${s.closed_trades})` : "-";
-    $("kpi-fees").textContent = fmtKrw(s.cumulative_fees_krw);
+    const feesVal = Number(s.cumulative_fees_krw || 0);
+    const slipVal = Number(s.cumulative_slippage_krw || 0);
+    const totalCost = s.total_trading_cost_krw !== undefined ? Number(s.total_trading_cost_krw) : feesVal + slipVal;
+    const feesEl = $("kpi-fees");
+    feesEl.textContent = fmtKrw(totalCost);
+    feesEl.title = `수수료 ${fmtKrw(feesVal)} + 슬리피지 ${fmtKrw(slipVal)}`;
     $("kpi-sharpe").textContent = s.sharpe_ratio !== null ? Number(s.sharpe_ratio).toFixed(2) : "데이터 축적 중";
   }
 
@@ -624,7 +629,7 @@
     const tbody = $("trades-tbody");
     const trades = data.trades || [];
     if (!trades.length) {
-      tbody.innerHTML = `<tr><td colspan="10" class="empty-state">아직 체결된 모의 거래가 없습니다. 유리한 진입 신호가 포착되면 자동으로 기록됩니다.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="11" class="empty-state">아직 체결된 모의 거래가 없습니다. 유리한 진입 신호가 포착되면 자동으로 기록됩니다.</td></tr>`;
       return;
     }
 
@@ -635,6 +640,8 @@
           t.realized_pnl_krw !== null && t.realized_pnl_krw !== undefined
             ? `${fmtKrw(t.realized_pnl_krw, true)} (${fmtPct(t.realized_pnl_pct)})`
             : "-";
+        const slipBps = t.slippage_bps !== undefined && t.slippage_bps !== null ? `${Number(t.slippage_bps).toFixed(1)}bp` : "-";
+        const slipKrw = t.slippage_krw !== undefined && t.slippage_krw !== null ? ` (${fmtKrw(t.slippage_krw)})` : "";
         return `
           <tr>
             <td class="mono">${escapeHtml(shortKst(t.time_kst))}</td>
@@ -645,6 +652,7 @@
             <td class="num">${Number(t.sol_qty).toFixed(4)}</td>
             <td class="num">${fmtKrw(t.krw_amount)}</td>
             <td class="num">${fmtKrw(t.fee_krw)}</td>
+            <td class="num">${slipBps}${slipKrw}</td>
             <td class="num ${t.realized_pnl_krw !== null ? signClass(t.realized_pnl_krw) : ""}">${pnlText}</td>
             <td class="reason-cell">${escapeHtml(t.reason)}</td>
           </tr>

@@ -174,7 +174,7 @@ def render_markdown_briefing(dashboard_payload: dict[str, Any]) -> str:
         f"- **총 평가자산**: {round(s['total_equity_krw']):,}원 (누적 {_format_signed_pct(s['total_return_pct'])} / 손익 {round(s['total_pnl_krw']):+,}원)",
         f"- **단순 보유 대비**: B&H {_format_signed_pct(s['benchmark_return_pct'])} / 초과수익 `{s['alpha_pp']:+.2f}%p`",
         f"- **포지션**: 현금 {round(s['cash_krw']):,}원 | SOL {s['sol_qty']:.4f}개 (비중 {s['exposure_pct']:.1f}%)",
-        f"- **누적 통계**: 실행 {s['run_count']}회 | 거래 {s['total_trades']}회 | 최대낙폭(MDD) {s['max_drawdown_pct']:.2f}% | 누적 수수료 {round(s['cumulative_fees_krw']):,}원",
+        f"- **누적 통계**: 실행 {s['run_count']}회 | 거래 {s['total_trades']}회 | 최대낙폭(MDD) {s['max_drawdown_pct']:.2f}% | 누적 수수료 {round(s['cumulative_fees_krw']):,}원 | 누적 슬리피지 {round(s.get('cumulative_slippage_krw', 0.0)):,}원",
         "",
         f"> {dec['briefing_summary']}",
     ]

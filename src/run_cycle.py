@@ -56,7 +56,8 @@ def run_hourly_cycle(
     executed_this_cycle: list[dict[str, Any]] = []
 
     # 1. Check intrabar Stop-Loss / Take-Profit triggers from the elapsed hour
-    intrabar_trade = check_intrabar_triggers(state, snapshot)
+    atr14_pct = float(indicators.get("atr14_pct", 1.0))
+    intrabar_trade = check_intrabar_triggers(state, snapshot, atr14_pct=atr14_pct)
     sl_cooldown_active = False
     if intrabar_trade is not None:
         executed_this_cycle.append(intrabar_trade)
@@ -95,6 +96,7 @@ def run_hourly_cycle(
         snapshot,
         decision,
         sl_cooldown_active=sl_cooldown_active,
+        atr14_pct=atr14_pct,
     )
     if decision_trade is not None:
         executed_this_cycle.append(decision_trade)

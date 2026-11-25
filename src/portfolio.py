@@ -15,8 +15,14 @@ from .config import (
     INITIAL_CAPITAL_KRW,
     KST,
     MAX_POSITION_RATIO,
+    MAX_TOTAL_SLIPPAGE_RATE,
+    MAX_VOL_SLIPPAGE_RATE,
     MIN_ORDER_KRW,
     MIN_ORDER_PCT,
+    STOP_LOSS_EXTRA_SLIPPAGE_RATE,
+    TAKE_PROFIT_SLIPPAGE_RATE,
+    VOL_SLIPPAGE_ATR_THRESHOLD_PCT,
+    VOL_SLIPPAGE_PER_ATR_PCT,
 )
 from .market_data import Candle, MarketSnapshot
 
@@ -44,6 +50,7 @@ def create_initial_state(snapshot: MarketSnapshot) -> dict[str, Any]:
         "take_profit_price": None,
         "highest_price_since_entry": None,
         "cumulative_fees_krw": 0.0,
+        "cumulative_slippage_krw": 0.0,
         "realized_pnl_krw": 0.0,
         "peak_equity_krw": INITIAL_CAPITAL_KRW,
         "max_drawdown_pct": 0.0,
@@ -68,7 +75,124 @@ def create_initial_state(snapshot: MarketSnapshot) -> dict[str, Any]:
     }
 
 
+def _walk_orderbook_buy_vwap(
+    asks: tuple[tuple[float, float], ...],
+    krw_notional: float,
+) -> float | None:
+    """Walk live Upbit ask levels to estimate VWAP execution price for a KRW market buy."""
+    if not asks or krw_notional <= 0:
+        return None
+    remaining_krw = krw_notional
+    total_qty = 0.0
+    for price, size_sol in asks:
+        if price <= 0 or size_sol <= 0:
+            continue
+        level_krw = price * size_sol
+        if level_krw >= remaining_krw:
+            total_qty += remaining_krw / price
+            remaining_krw = 0.0
+            break
+        total_qty += size_sol
+        remaining_krw -= level_krw
+
+    if remaining_krw > 0:
+        # Order exceeds top-15 depth; fill remainder at worst ask + 10 bps penalty
+        tail_price = asks[-1][0] * 1.0010
+        total_qty += remaining_krw / tail_price
+
+    return (krw_notional / total_qty) if total_qty > 0 else None
+
+
+def _walk_orderbook_sell_vwap(
+    bids: tuple[tuple[float, float], ...],
+    sol_qty: float,
+) -> float | None:
+    """Walk live Upbit bid levels to estimate VWAP execution price for a SOL market sell."""
+    if not bids or sol_qty <= 0:
+        return None
+    remaining_qty = sol_qty
+    total_krw = 0.0
+    for price, size_sol in bids:
+        if price <= 0 or size_sol <= 0:
+            continue
+        if size_sol >= remaining_qty:
+            total_krw += remaining_qty * price
+            remaining_qty = 0.0
+            break
+        total_krw += size_sol * price
+        remaining_qty -= size_sol
+
+    if remaining_qty > 0:
+        # Order exceeds top-15 depth; fill remainder at worst bid - 10 bps penalty
+        tail_price = bids[-1][0] * 0.9990
+        total_krw += remaining_qty * tail_price
+
+    return (total_krw / sol_qty) if sol_qty > 0 else None
+
+
+def estimate_execution_slippage(
+    *,
+    side: str,
+    ref_price: float,
+    order_krw: float,
+    spread_bps: float,
+    atr14_pct: float = 1.0,
+    trigger: str = "gemini",
+    orderbook_asks: tuple[tuple[float, float], ...] = (),
+    orderbook_bids: tuple[tuple[float, float], ...] = (),
+) -> tuple[float, dict[str, float]]:
+    """Compute realistic execution slippage rate combining orderbook depth, ATR volatility, and trigger type."""
+    if ref_price <= 0:
+        return BASE_SLIPPAGE_RATE, {"book_bps": round(BASE_SLIPPAGE_RATE * 10_000.0, 2), "vol_bps": 0.0, "event_bps": 0.0}
+
+    # Limit-style intrabar take-profit rests on the book with minimal slippage
+    if trigger == "take_profit":
+        rate = TAKE_PROFIT_SLIPPAGE_RATE
+        return rate, {"book_bps": 0.0, "vol_bps": 0.0, "event_bps": round(rate * 10_000.0, 2)}
+
+    half_spread = max(0.0, spread_bps) / 2.0 / 10_000.0
+    floor_book_rate = max(BASE_SLIPPAGE_RATE, half_spread)
+
+    # Volatility / latency drift surcharge based on 1h ATR(14)%
+    vol_excess = max(0.0, atr14_pct - VOL_SLIPPAGE_ATR_THRESHOLD_PCT)
+    vol_rate = min(MAX_VOL_SLIPPAGE_RATE, vol_excess * VOL_SLIPPAGE_PER_ATR_PCT)
+
+    # Intrabar stop-loss executes during sharp downward sweeps -> extra panic-sweep slippage
+    if trigger == "stop_loss":
+        event_rate = STOP_LOSS_EXTRA_SLIPPAGE_RATE
+        total_rate = min(MAX_TOTAL_SLIPPAGE_RATE, floor_book_rate + (vol_rate * 1.5) + event_rate)
+        return total_rate, {
+            "book_bps": round(floor_book_rate * 10_000.0, 2),
+            "vol_bps": round(vol_rate * 1.5 * 10_000.0, 2),
+            "event_bps": round(event_rate * 10_000.0, 2),
+        }
+
+    # Scheduled market order: walk live orderbook ladder when available
+    book_rate = floor_book_rate
+    if side == "BUY" and orderbook_asks:
+        vwap = _walk_orderbook_buy_vwap(orderbook_asks, order_krw)
+        if vwap is not None and vwap > ref_price:
+            book_rate = max(floor_book_rate, (vwap - ref_price) / ref_price)
+    elif side == "SELL" and orderbook_bids:
+        est_qty = order_krw / ref_price
+        vwap = _walk_orderbook_sell_vwap(orderbook_bids, est_qty)
+        if vwap is not None and vwap < ref_price:
+            book_rate = max(floor_book_rate, (ref_price - vwap) / ref_price)
+    elif order_krw > 1_000_000.0:
+        # Fallback size-impact estimate when live orderbook ladder is unavailable (+0.5 bps per 100만 원 above 100만 원)
+        size_impact = min(0.0010, ((order_krw - 1_000_000.0) / 1_000_000.0) * 0.00005)
+        book_rate = floor_book_rate + size_impact
+
+    total_rate = min(MAX_TOTAL_SLIPPAGE_RATE, book_rate + vol_rate)
+    return total_rate, {
+        "book_bps": round(book_rate * 10_000.0, 2),
+        "vol_bps": round(vol_rate * 10_000.0, 2),
+        "event_bps": 0.0,
+    }
+
+
 def effective_slippage_rate(spread_bps: float) -> float:
+    """Backward-compatible helper returning base half-spread slippage rate."""
     half_spread = max(0.0, spread_bps) / 2.0 / 10_000.0
     return max(BASE_SLIPPAGE_RATE, half_spread)
 
@@ -106,6 +230,8 @@ def _record_sell_execution(
     sell_qty: float,
     ref_price: float,
     spread_bps: float,
+    atr14_pct: float,
+    orderbook_bids: tuple[tuple[float, float], ...],
     timestamp_kst: str,
     timestamp_utc: str,
     trigger: str,
@@ -117,12 +243,21 @@ def _record_sell_execution(
     if qty <= 1e-9:
         return None
 
-    slip_rate = effective_slippage_rate(spread_bps)
+    slip_rate, slip_breakdown = estimate_execution_slippage(
+        side="SELL",
+        ref_price=ref_price,
+        order_krw=qty * ref_price,
+        spread_bps=spread_bps,
+        atr14_pct=atr14_pct,
+        trigger=trigger,
+        orderbook_bids=orderbook_bids,
+    )
     exec_price = ref_price * (1.0 - slip_rate)
     gross_krw = qty * exec_price
     if gross_krw < MIN_ORDER_KRW and qty < held_qty * 0.99:
         return None
 
+    slippage_krw = qty * max(0.0, ref_price - exec_price)
     fee_krw = gross_krw * FEE_RATE
     net_proceeds = gross_krw - fee_krw
     avg_entry = float(state["avg_entry_price"])
@@ -143,6 +278,7 @@ def _record_sell_execution(
     state["sol_qty"] = remaining_qty
 
     state["cumulative_fees_krw"] = float(state["cumulative_fees_krw"]) + fee_krw
+    state["cumulative_slippage_krw"] = float(state.get("cumulative_slippage_krw", 0.0)) + slippage_krw
     state["realized_pnl_krw"] = float(state["realized_pnl_krw"]) + realized_pnl
 
     stats = state["stats"]
@@ -166,6 +302,8 @@ def _record_sell_execution(
         "spot_price": round(ref_price, 2),
         "exec_price": round(exec_price, 2),
         "slippage_bps": round(slip_rate * 10_000.0, 2),
+        "slippage_krw": round(slippage_krw, 0),
+        "slippage_breakdown": slip_breakdown,
         "sol_qty": round(qty, 6),
         "krw_amount": round(gross_krw, 0),
         "fee_krw": round(fee_krw, 0),
@@ -181,6 +319,8 @@ def _record_buy_execution(
     krw_budget: float,
     spot_price: float,
     spread_bps: float,
+    atr14_pct: float,
+    orderbook_asks: tuple[tuple[float, float], ...],
     stop_loss_pct: float,
     take_profit_pct: float,
     timestamp_kst: str,
@@ -199,11 +339,20 @@ def _record_buy_execution(
     if spend_total < MIN_ORDER_KRW:
         return None
 
-    slip_rate = effective_slippage_rate(spread_bps)
+    slip_rate, slip_breakdown = estimate_execution_slippage(
+        side="BUY",
+        ref_price=spot_price,
+        order_krw=spend_total,
+        spread_bps=spread_bps,
+        atr14_pct=atr14_pct,
+        trigger=trigger,
+        orderbook_asks=orderbook_asks,
+    )
     exec_price = spot_price * (1.0 + slip_rate)
     fee_krw = spend_total * FEE_RATE
     net_krw = spend_total - fee_krw
     bought_qty = net_krw / exec_price
+    slippage_krw = bought_qty * max(0.0, exec_price - spot_price)
 
     prev_qty = float(state["sol_qty"])
     prev_avg = float(state["avg_entry_price"])
@@ -225,6 +374,7 @@ def _record_buy_execution(
     state["stop_loss_price"] = round(new_avg * (1.0 - stop_loss_pct / 100.0), 1)
     state["take_profit_price"] = round(new_avg * (1.0 + take_profit_pct / 100.0), 1)
     state["cumulative_fees_krw"] = float(state["cumulative_fees_krw"]) + fee_krw
+    state["cumulative_slippage_krw"] = float(state.get("cumulative_slippage_krw", 0.0)) + slippage_krw
 
     stats = state["stats"]
     stats["total_trades"] += 1
@@ -240,6 +390,8 @@ def _record_buy_execution(
         "spot_price": round(spot_price, 2),
         "exec_price": round(exec_price, 2),
         "slippage_bps": round(slip_rate * 10_000.0, 2),
+        "slippage_krw": round(slippage_krw, 0),
+        "slippage_breakdown": slip_breakdown,
         "sol_qty": round(bought_qty, 6),
         "krw_amount": round(spend_total, 0),
         "fee_krw": round(fee_krw, 0),
@@ -252,6 +404,8 @@ def _record_buy_execution(
 def check_intrabar_triggers(
     state: dict[str, Any],
     snapshot: MarketSnapshot,
+    *,
+    atr14_pct: float = 1.0,
 ) -> dict[str, Any] | None:
     """Check if Stop-Loss or Take-Profit was touched between the last run and now."""
     if float(state["sol_qty"]) <= 1e-8:
@@ -286,6 +440,8 @@ def check_intrabar_triggers(
             sell_qty=float(state["sol_qty"]),
             ref_price=float(sl),
             spread_bps=snapshot.spread_bps,
+            atr14_pct=atr14_pct,
+            orderbook_bids=snapshot.orderbook_bids,
             timestamp_kst=snapshot.fetched_at_kst,
             timestamp_utc=snapshot.fetched_at_utc,
             trigger="stop_loss",
@@ -299,6 +455,8 @@ def check_intrabar_triggers(
             sell_qty=float(state["sol_qty"]),
             ref_price=float(tp),
             spread_bps=snapshot.spread_bps,
+            atr14_pct=atr14_pct,
+            orderbook_bids=snapshot.orderbook_bids,
             timestamp_kst=snapshot.fetched_at_kst,
             timestamp_utc=snapshot.fetched_at_utc,
             trigger="take_profit",
@@ -346,6 +504,7 @@ def execute_decision(
     decision: TradingDecision,
     *,
     sl_cooldown_active: bool = False,
+    atr14_pct: float = 1.0,
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Apply hard guardrails and execute paper BUY/SELL/HOLD. Returns (trade_record, guardrail_note)."""
     spot = snapshot.spot_price
@@ -364,6 +523,8 @@ def execute_decision(
             krw_budget=budget,
             spot_price=spot,
             spread_bps=snapshot.spread_bps,
+            atr14_pct=atr14_pct,
+            orderbook_asks=snapshot.orderbook_asks,
             stop_loss_pct=decision.stop_loss_pct,
             take_profit_pct=decision.take_profit_pct,
             timestamp_kst=snapshot.fetched_at_kst,
@@ -388,6 +549,8 @@ def execute_decision(
             sell_qty=sell_qty,
             ref_price=spot,
             spread_bps=snapshot.spread_bps,
+            atr14_pct=atr14_pct,
+            orderbook_bids=snapshot.orderbook_bids,
             timestamp_kst=snapshot.fetched_at_kst,
             timestamp_utc=snapshot.fetched_at_utc,
             trigger=decision.engine,
@@ -470,6 +633,8 @@ def finalize_cycle_metrics(
 
     daily_ref = float(state.get("daily_start_equity_krw") or eq)
     daily_return_pct = ((eq / daily_ref) - 1.0) * 100.0 if daily_ref > 0 else 0.0
+    cum_fees = float(state.get("cumulative_fees_krw", 0.0))
+    cum_slip = float(state.get("cumulative_slippage_krw", 0.0))
 
     return {
         "total_equity_krw": round(eq, 0),
@@ -490,7 +655,9 @@ def finalize_cycle_metrics(
         "stop_loss_price_krw": state.get("stop_loss_price"),
         "take_profit_price_krw": state.get("take_profit_price"),
         "entry_time_kst": state.get("entry_time_kst"),
-        "cumulative_fees_krw": round(float(state["cumulative_fees_krw"]), 0),
+        "cumulative_fees_krw": round(cum_fees, 0),
+        "cumulative_slippage_krw": round(cum_slip, 0),
+        "total_trading_cost_krw": round(cum_fees + cum_slip, 0),
         "max_drawdown_pct": round(float(state["max_drawdown_pct"]), 2),
         "current_drawdown_pct": round(cur_dd, 2),
         "win_rate_pct": round(win_rate, 1) if win_rate is not None else None,

@@ -58,6 +58,8 @@ class MarketSnapshot:
     candles_1h: list[Candle]  # Completed closed 1h candles, oldest -> newest
     current_candle_1h: Candle | None  # Currently forming 1h candle
     candles_4h: list[Candle]  # 4h candles, oldest -> newest
+    orderbook_asks: tuple[tuple[float, float], ...] = ()  # [(ask_price, ask_size_sol), ...] lowest -> highest
+    orderbook_bids: tuple[tuple[float, float], ...] = ()  # [(bid_price, bid_size_sol), ...] highest -> lowest
 
 
 def _http_get_json(url: str, retries: int = 3, backoff: float = 1.5) -> Any:
@@ -152,12 +154,23 @@ def fetch_upbit_snapshot(market: str = MARKET) -> MarketSnapshot:
     mid = (best_ask + best_bid) / 2.0 if (best_ask + best_bid) > 0 else spot_price
     spread_bps = ((best_ask - best_bid) / mid * 10_000.0) if mid > 0 else 0.0
 
-    # Top-5 orderbook depth imbalance
+    # Top-5 orderbook depth imbalance & full 15-level ladder for depth-walk slippage
     top_units = units[:5]
     bid_sum = sum(float(u["bid_size"]) for u in top_units)
     ask_sum = sum(float(u["ask_size"]) for u in top_units)
     denom = bid_sum + ask_sum
     imbalance = (bid_sum - ask_sum) / denom if denom > 0 else 0.0
+
+    asks = tuple(
+        (float(u["ask_price"]), float(u["ask_size"]))
+        for u in units
+        if float(u.get("ask_price", 0.0)) > 0 and float(u.get("ask_size", 0.0)) > 0
+    )
+    bids = tuple(
+        (float(u["bid_price"]), float(u["bid_size"]))
+        for u in units
+        if float(u.get("bid_price", 0.0)) > 0 and float(u.get("bid_size", 0.0)) > 0
+    )
 
     return MarketSnapshot(
         source="upbit",
@@ -178,6 +191,8 @@ def fetch_upbit_snapshot(market: str = MARKET) -> MarketSnapshot:
         candles_1h=closed_1h,
         current_candle_1h=current_1h,
         candles_4h=closed_4h if closed_4h else all_4h,
+        orderbook_asks=asks,
+        orderbook_bids=bids,
     )
 
 

@@ -26,8 +26,14 @@ QUOTE_CURRENCY = "KRW"
 INITIAL_CAPITAL_KRW = 10_000_000.0  # 1,000만 원
 
 # Execution Realism (Upbit KRW Market)
-FEE_RATE = 0.0005  # 0.05% per trade
-BASE_SLIPPAGE_RATE = 0.0003  # 0.03% (3 bps) base market-order slippage
+FEE_RATE = 0.0005  # 0.05% per trade (Upbit KRW market)
+BASE_SLIPPAGE_RATE = 0.0005  # 0.05% (5 bps) floor slippage for market orders
+VOL_SLIPPAGE_ATR_THRESHOLD_PCT = 0.8  # Apply extra drift slippage when 1h ATR(14) > 0.8%
+VOL_SLIPPAGE_PER_ATR_PCT = 0.0004  # +4 bps per +1.0%p ATR above threshold
+MAX_VOL_SLIPPAGE_RATE = 0.0015  # Cap volatility surcharge at 15 bps (0.15%)
+STOP_LOSS_EXTRA_SLIPPAGE_RATE = 0.0012  # +12 bps (0.12%) panic-sweep surcharge on intrabar SL
+TAKE_PROFIT_SLIPPAGE_RATE = 0.0001  # 1 bp (0.01%) minimal slippage on limit-style intrabar TP
+MAX_TOTAL_SLIPPAGE_RATE = 0.0060  # Hard cap at 60 bps (0.60%) per fill
 
 # Hard Risk Guardrails (enforced regardless of AI output)
 MAX_POSITION_RATIO = 0.70  # Max 70% of total equity in SOL (min 30% KRW buffer)

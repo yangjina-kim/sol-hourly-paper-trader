@@ -261,7 +261,54 @@ class TestSolPaperTrader(unittest.TestCase):
             self.assertTrue(dash_path.exists())
             saved_dash = json.loads(dash_path.read_text(encoding="utf-8"))
             self.assertEqual(saved_dash["summary"]["run_count"], 3)
+            self.assertIn("cumulative_slippage_krw", saved_dash["summary"])
             self.assertIn("최신 정각 브리핑", readme_path.read_text(encoding="utf-8"))
+
+    def test_realistic_slippage_model_orderbook_vol_and_triggers(self) -> None:
+        from src.portfolio import estimate_execution_slippage
+
+        # 1) Shallow ask book should push VWAP slippage above base 5 bps for a 5,000,000 KRW buy
+        asks = (
+            (100_050.0, 10.0),  # ~1,000,500 KRW
+            (100_150.0, 15.0),  # ~1,502,250 KRW
+            (100_300.0, 30.0),  # ~3,009,000 KRW
+        )
+        rate_buy, breakdown_buy = estimate_execution_slippage(
+            side="BUY",
+            ref_price=100_000.0,
+            order_krw=5_000_000.0,
+            spread_bps=6.0,
+            atr14_pct=1.8,  # +4 bps vol drift above 0.8% threshold
+            trigger="gemini",
+            orderbook_asks=asks,
+        )
+        self.assertGreater(breakdown_buy["book_bps"], 15.0)
+        self.assertAlmostEqual(breakdown_buy["vol_bps"], 4.0, places=2)
+        self.assertAlmostEqual(rate_buy * 10_000.0, breakdown_buy["book_bps"] + breakdown_buy["vol_bps"], places=1)
+
+        # 2) Intrabar stop-loss incurs panic-sweep surcharge (+12 bps) & 1.5x vol drift
+        rate_sl, breakdown_sl = estimate_execution_slippage(
+            side="SELL",
+            ref_price=100_000.0,
+            order_krw=5_000_000.0,
+            spread_bps=8.0,
+            atr14_pct=2.0,
+            trigger="stop_loss",
+        )
+        self.assertAlmostEqual(breakdown_sl["event_bps"], 12.0, places=2)
+        self.assertGreater(rate_sl, 0.0020)  # > 20 bps
+
+        # 3) Limit-style take-profit has minimal 1 bp slippage
+        rate_tp, breakdown_tp = estimate_execution_slippage(
+            side="SELL",
+            ref_price=100_000.0,
+            order_krw=5_000_000.0,
+            spread_bps=12.0,
+            atr14_pct=3.0,
+            trigger="take_profit",
+        )
+        self.assertAlmostEqual(rate_tp, 0.0001, places=6)
+        self.assertAlmostEqual(breakdown_tp["event_bps"], 1.0, places=2)
 
 
 if __name__ == "__main__":
