@@ -87,7 +87,7 @@
     $("spot-price").textContent = fmtKrw(m.spot_price);
     const chEl = $("spot-change-24h");
     chEl.textContent = `${fmtPct(m.change_24h_pct)} (${fmtKrw(m.change_24h_krw, true)})`;
-    chEl.className = `mono ticker-delta ${signClass(m.change_24h_pct)}`;
+    chEl.className = `num-display ticker-delta ${signClass(m.change_24h_pct)}`;
 
     const engineEl = $("engine-badge");
     if (dec.engine === "gemini") {
@@ -131,12 +131,12 @@
 
     const retEl = $("kpi-return");
     retEl.textContent = fmtPct(s.total_return_pct);
-    retEl.className = `mono kpi-delta ${signClass(s.total_return_pct)}`;
+    retEl.className = `num-display kpi-delta ${signClass(s.total_return_pct)}`;
     $("kpi-pnl").textContent = `누적 손익 ${fmtKrw(s.total_pnl_krw, true)}`;
 
     const alphaEl = $("kpi-alpha");
     alphaEl.textContent = fmtPct(s.alpha_pp, true, "%p");
-    alphaEl.className = `mono kpi-value ${signClass(s.alpha_pp)}`;
+    alphaEl.className = `num-display kpi-value ${signClass(s.alpha_pp)}`;
     $("kpi-bm-return").textContent = `B&H ${fmtPct(s.benchmark_return_pct)}`;
     $("kpi-bm-equity").textContent = fmtKrw(s.benchmark_equity_krw);
 
@@ -148,16 +148,16 @@
     const unrealEl = $("kpi-unrealized");
     if (Number(s.sol_qty) > 1e-8) {
       unrealEl.textContent = `평가 ${fmtPct(s.unrealized_pnl_pct)} (${fmtKrw(s.unrealized_pnl_krw, true)})`;
-      unrealEl.className = `mono kpi-secondary ${signClass(s.unrealized_pnl_krw)}`;
+      unrealEl.className = `num-display kpi-secondary ${signClass(s.unrealized_pnl_krw)}`;
     } else {
       unrealEl.textContent = "전액 원화 관망 중";
-      unrealEl.className = "mono kpi-secondary is-neutral";
+      unrealEl.className = "num-display kpi-secondary is-neutral";
     }
 
     $("kpi-trade-count").textContent = `${s.total_trades}건 체결`;
     const mddEl = $("kpi-mdd");
     mddEl.textContent = fmtPct(s.max_drawdown_pct, false);
-    mddEl.className = `mono mini-val ${Number(s.max_drawdown_pct) < 0 ? "is-neg" : ""}`;
+    mddEl.className = `num-display mini-val ${Number(s.max_drawdown_pct) < 0 ? "is-neg" : ""}`;
     $("kpi-winrate").textContent = s.win_rate_pct !== null ? `${s.win_rate_pct.toFixed(1)}% (${s.winning_trades}/${s.closed_trades})` : "-";
     $("kpi-fees").textContent = fmtKrw(s.cumulative_fees_krw);
     $("kpi-sharpe").textContent = s.sharpe_ratio !== null ? Number(s.sharpe_ratio).toFixed(2) : "데이터 축적 중";
@@ -180,7 +180,7 @@
 
     const macdEl = $("ind-macd");
     macdEl.textContent = `${ind.macd_hist >= 0 ? "+" : ""}${Number(ind.macd_hist).toFixed(1)}`;
-    macdEl.className = `mono ind-val ${signClass(ind.macd_hist)}`;
+    macdEl.className = `num-display ind-val ${signClass(ind.macd_hist)}`;
     $("ind-macd-note").textContent = ind.macd_hist_delta >= 0 ? "모멘텀 개선" : "모멘텀 둔화";
 
     $("ind-bb").textContent = `%B ${Number(ind.bb_percent_b).toFixed(2)}`;
@@ -188,12 +188,12 @@
 
     const vwapEl = $("ind-vwap");
     vwapEl.textContent = fmtPct(ind.dist_from_vwap_pct);
-    vwapEl.className = `mono ind-val ${signClass(ind.dist_from_vwap_pct)}`;
+    vwapEl.className = `num-display ind-val ${signClass(ind.dist_from_vwap_pct)}`;
     $("ind-vol").textContent = `거래량 ${Number(ind.volume_ratio_24h).toFixed(2)}x`;
 
     const qEl = $("ind-qscore");
     qEl.textContent = `${ind.quant_score > 0 ? "+" : ""}${Number(ind.quant_score).toFixed(1)}점`;
-    qEl.className = `mono ind-val ${signClass(ind.quant_score)}`;
+    qEl.className = `num-display ind-val ${signClass(ind.quant_score)}`;
     $("ind-ob").textContent = `호가 ${ind.orderbook_imbalance >= 0 ? "+" : ""}${Number(ind.orderbook_imbalance).toFixed(2)}`;
   }
 
@@ -318,7 +318,7 @@
         const v = minV + ((maxV - minV) * t) / 4;
         const y = yFor(v);
         gridSvg += `<line x1="${pad.left}" y1="${y.toFixed(1)}" x2="${W - pad.right}" y2="${y.toFixed(1)}" stroke="${colorGrid}" stroke-width="1" />`;
-        gridSvg += `<text x="${pad.left - 8}" y="${(y + 4).toFixed(1)}" text-anchor="end" fill="${colorMuted}" font-family="IBM Plex Mono, monospace" font-size="10.5">${(v / 10000).toFixed(0)}만</text>`;
+        gridSvg += `<text x="${pad.left - 8}" y="${(y + 4).toFixed(1)}" text-anchor="end" fill="${colorMuted}" font-family="Paperlogy, IBM Plex Mono, sans-serif" font-weight="500" font-size="10.5">${(v / 10000).toFixed(0)}만</text>`;
       }
 
       // X-axis labels
@@ -327,7 +327,7 @@
       for (let k = 0; k < xTicks; k++) {
         const idx = Math.round((k * (chartPts.length - 1)) / Math.max(1, xTicks - 1));
         const label = chartPts[idx].time_kst.includes("시작") ? "시작" : shortKst(chartPts[idx].time_kst);
-        xAxisSvg += `<text x="${xFor(idx).toFixed(1)}" y="${H - 10}" text-anchor="middle" fill="${colorMuted}" font-family="IBM Plex Mono, monospace" font-size="10">${escapeHtml(label)}</text>`;
+        xAxisSvg += `<text x="${xFor(idx).toFixed(1)}" y="${H - 10}" text-anchor="middle" fill="${colorMuted}" font-family="Paperlogy, IBM Plex Mono, sans-serif" font-weight="500" font-size="10.5">${escapeHtml(label)}</text>`;
       }
 
       // Trade Markers
@@ -345,33 +345,33 @@
       svg.innerHTML = `
         <defs>
           <linearGradient id="eqFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="${colorStrategy}" stop-opacity="0.16" />
+            <stop offset="0%" stop-color="${colorStrategy}" stop-opacity="0.18" />
             <stop offset="100%" stop-color="${colorStrategy}" stop-opacity="0.01" />
           </linearGradient>
         </defs>
         ${gridSvg}
         ${xAxisSvg}
         <path d="${areaPath}" fill="url(#eqFill)" />
-        <path d="${bmLine}" fill="none" stroke="${colorBenchmark}" stroke-width="1.8" stroke-dasharray="5 4" />
-        <path d="${eqLine}" fill="none" stroke="${colorStrategy}" stroke-width="2.4" stroke-linejoin="round" />
+        <path d="${bmLine}" fill="none" stroke="${colorBenchmark}" stroke-width="2" stroke-dasharray="5 4" />
+        <path d="${eqLine}" fill="none" stroke="${colorStrategy}" stroke-width="2.6" stroke-linejoin="round" />
         ${markersSvg}
         <line id="hover-vline" x1="0" y1="${pad.top}" x2="0" y2="${pad.top + plotH}" stroke="${colorInk}" stroke-opacity="0.25" stroke-width="1" stroke-dasharray="3 3" visibility="hidden" />
-        <circle id="hover-dot" cx="0" cy="0" r="4.5" fill="${colorStrategy}" stroke="#fff" stroke-width="2" visibility="hidden" />
+        <circle id="hover-dot" cx="0" cy="0" r="5" fill="${colorStrategy}" stroke="#fff" stroke-width="2" visibility="hidden" />
         <rect id="hover-capture" x="${pad.left}" y="${pad.top}" width="${plotW}" height="${plotH}" fill="transparent" />
       `;
 
       bindChartHover(chartPts, xFor, (p) => yFor(p.equity_krw), (p) => `
         <div class="tt-time">${escapeHtml(p.time_kst)}</div>
-        <div class="tt-row"><span>전략 자산</span><strong class="mono">${fmtKrw(p.equity_krw)} (${fmtPct(p.return_pct)})</strong></div>
-        <div class="tt-row"><span>단순 보유</span><span class="mono">${fmtKrw(p.benchmark_krw)} (${fmtPct(p.benchmark_return_pct)})</span></div>
-        <div class="tt-row"><span>SOL 시세</span><span class="mono">${fmtKrw(p.spot_price)}</span></div>
+        <div class="tt-row"><span>전략 자산</span><strong class="num-display">${fmtKrw(p.equity_krw)} (${fmtPct(p.return_pct)})</strong></div>
+        <div class="tt-row"><span>단순 보유</span><span class="num-display">${fmtKrw(p.benchmark_krw)} (${fmtPct(p.benchmark_return_pct)})</span></div>
+        <div class="tt-row"><span>SOL 시세</span><span class="num-display">${fmtKrw(p.spot_price)}</span></div>
       `);
       return;
     }
 
     // Price & Signals Mode: Uses recent 72h Upbit 1h candles if series is short, otherwise series prices
     legendEl.innerHTML = `
-      <span class="legend-item"><span class="legend-swatch" style="background:${colorInk}"></span>SOL/KRW 종가</span>
+      <span class="legend-item"><span class="legend-swatch" style="background:${colorStrategy}"></span>SOL/KRW 종가</span>
       <span class="legend-item"><span class="legend-swatch" style="background:${colorBenchmark}"></span>EMA 21 (단기 추세)</span>
       <span class="legend-item"><span class="legend-dot" style="background:${colorPos}"></span>매수 타점</span>
       <span class="legend-item"><span class="legend-dot" style="background:${colorNeg}"></span>매도 타점</span>
@@ -440,30 +440,31 @@
       const v = minV + ((maxV - minV) * t) / 4;
       const y = yFor(v);
       gridSvg += `<line x1="${pad.left}" y1="${y.toFixed(1)}" x2="${W - pad.right}" y2="${y.toFixed(1)}" stroke="${colorGrid}" stroke-width="1" />`;
-      gridSvg += `<text x="${pad.left - 8}" y="${(y + 4).toFixed(1)}" text-anchor="end" fill="${colorMuted}" font-family="IBM Plex Mono, monospace" font-size="10.5">${Math.round(v).toLocaleString("ko-KR")}</text>`;
+      gridSvg += `<text x="${pad.left - 8}" y="${(y + 4).toFixed(1)}" text-anchor="end" fill="${colorMuted}" font-family="Paperlogy, IBM Plex Mono, sans-serif" font-weight="500" font-size="10.5">${Math.round(v).toLocaleString("ko-KR")}</text>`;
     }
 
     let xAxisSvg = "";
     const xTicks = Math.min(5, pricePts.length);
     for (let k = 0; k < xTicks; k++) {
       const idx = Math.round((k * (pricePts.length - 1)) / Math.max(1, xTicks - 1));
-      xAxisSvg += `<text x="${xFor(idx).toFixed(1)}" y="${H - 10}" text-anchor="middle" fill="${colorMuted}" font-family="IBM Plex Mono, monospace" font-size="10">${shortKst(pricePts[idx].time_kst)}</text>`;
+      xAxisSvg += `<text x="${xFor(idx).toFixed(1)}" y="${H - 10}" text-anchor="middle" fill="${colorMuted}" font-family="Paperlogy, IBM Plex Mono, sans-serif" font-weight="500" font-size="10.5">${shortKst(pricePts[idx].time_kst)}</text>`;
     }
 
     const pricePath = pricePts.map((p, i) => `${i === 0 ? "M" : "L"}${xFor(i).toFixed(1)},${yFor(p.price).toFixed(1)}`).join(" ");
+    const priceAreaPath = `${pricePath} L${xFor(pricePts.length - 1).toFixed(1)},${(pad.top + plotH).toFixed(1)} L${pad.left},${(pad.top + plotH).toFixed(1)} Z`;
     const emaPts = pricePts.map((p, i) => (p.ema21 ? `${xFor(i).toFixed(1)},${yFor(p.ema21).toFixed(1)}` : null)).filter(Boolean);
     const emaPath = emaPts.length >= 2 ? `M${emaPts.join(" L")}` : "";
 
     let guidesSvg = "";
     if (s.stop_loss_price_krw) {
       const ySl = yFor(Number(s.stop_loss_price_krw));
-      guidesSvg += `<line x1="${pad.left}" y1="${ySl.toFixed(1)}" x2="${W - pad.right}" y2="${ySl.toFixed(1)}" stroke="${colorNeg}" stroke-width="1.2" stroke-dasharray="4 3" />`;
-      guidesSvg += `<text x="${W - pad.right - 4}" y="${(ySl - 4).toFixed(1)}" text-anchor="end" fill="${colorNeg}" font-family="IBM Plex Mono, monospace" font-size="10">SL ${Math.round(s.stop_loss_price_krw).toLocaleString("ko-KR")}</text>`;
+      guidesSvg += `<line x1="${pad.left}" y1="${ySl.toFixed(1)}" x2="${W - pad.right}" y2="${ySl.toFixed(1)}" stroke="${colorNeg}" stroke-width="1.3" stroke-dasharray="4 3" />`;
+      guidesSvg += `<text x="${W - pad.right - 4}" y="${(ySl - 4).toFixed(1)}" text-anchor="end" fill="${colorNeg}" font-family="Paperlogy, IBM Plex Mono, sans-serif" font-weight="600" font-size="10.5">SL ${Math.round(s.stop_loss_price_krw).toLocaleString("ko-KR")}</text>`;
     }
     if (s.take_profit_price_krw) {
       const yTp = yFor(Number(s.take_profit_price_krw));
-      guidesSvg += `<line x1="${pad.left}" y1="${yTp.toFixed(1)}" x2="${W - pad.right}" y2="${yTp.toFixed(1)}" stroke="${colorPos}" stroke-width="1.2" stroke-dasharray="4 3" />`;
-      guidesSvg += `<text x="${W - pad.right - 4}" y="${(yTp - 4).toFixed(1)}" text-anchor="end" fill="${colorPos}" font-family="IBM Plex Mono, monospace" font-size="10">TP ${Math.round(s.take_profit_price_krw).toLocaleString("ko-KR")}</text>`;
+      guidesSvg += `<line x1="${pad.left}" y1="${yTp.toFixed(1)}" x2="${W - pad.right}" y2="${yTp.toFixed(1)}" stroke="${colorPos}" stroke-width="1.3" stroke-dasharray="4 3" />`;
+      guidesSvg += `<text x="${W - pad.right - 4}" y="${(yTp - 4).toFixed(1)}" text-anchor="end" fill="${colorPos}" font-family="Paperlogy, IBM Plex Mono, sans-serif" font-weight="600" font-size="10.5">TP ${Math.round(s.take_profit_price_krw).toLocaleString("ko-KR")}</text>`;
     }
 
     let markersSvg = "";
@@ -478,22 +479,29 @@
     });
 
     svg.innerHTML = `
+      <defs>
+        <linearGradient id="priceFill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="${colorStrategy}" stop-opacity="0.14" />
+          <stop offset="100%" stop-color="${colorStrategy}" stop-opacity="0.01" />
+        </linearGradient>
+      </defs>
       ${gridSvg}
       ${xAxisSvg}
       ${guidesSvg}
-      ${emaPath ? `<path d="${emaPath}" fill="none" stroke="${colorBenchmark}" stroke-width="1.6" />` : ""}
-      <path d="${pricePath}" fill="none" stroke="${colorInk}" stroke-width="2.1" stroke-linejoin="round" />
+      <path d="${priceAreaPath}" fill="url(#priceFill)" />
+      ${emaPath ? `<path d="${emaPath}" fill="none" stroke="${colorBenchmark}" stroke-width="1.8" />` : ""}
+      <path d="${pricePath}" fill="none" stroke="${colorStrategy}" stroke-width="2.4" stroke-linejoin="round" />
       ${markersSvg}
       <line id="hover-vline" x1="0" y1="${pad.top}" x2="0" y2="${pad.top + plotH}" stroke="${colorInk}" stroke-opacity="0.25" stroke-width="1" stroke-dasharray="3 3" visibility="hidden" />
-      <circle id="hover-dot" cx="0" cy="0" r="4.5" fill="${colorInk}" stroke="#fff" stroke-width="2" visibility="hidden" />
+      <circle id="hover-dot" cx="0" cy="0" r="5" fill="${colorStrategy}" stroke="#fff" stroke-width="2" visibility="hidden" />
       <rect id="hover-capture" x="${pad.left}" y="${pad.top}" width="${plotW}" height="${plotH}" fill="transparent" />
     `;
 
     bindChartHover(pricePts, xFor, (p) => yFor(p.price), (p) => `
       <div class="tt-time">${escapeHtml(p.time_kst)}</div>
-      <div class="tt-row"><span>SOL 가격</span><strong class="mono">${fmtKrw(p.price)}</strong></div>
-      ${p.ema21 ? `<div class="tt-row"><span>EMA 21</span><span class="mono">${fmtKrw(p.ema21)}</span></div>` : ""}
-      ${p.executed_sides.length ? `<div class="tt-row"><span>체결</span><strong class="mono">${p.executed_sides.join(", ")}</strong></div>` : ""}
+      <div class="tt-row"><span>SOL 가격</span><strong class="num-display">${fmtKrw(p.price)}</strong></div>
+      ${p.ema21 ? `<div class="tt-row"><span>EMA 21</span><span class="num-display">${fmtKrw(p.ema21)}</span></div>` : ""}
+      ${p.executed_sides.length ? `<div class="tt-row"><span>체결</span><strong class="num-display">${p.executed_sides.join(", ")}</strong></div>` : ""}
     `);
   }
 
@@ -577,18 +585,18 @@
         return `
           <article class="feed-item">
             <button type="button" class="feed-summary" data-toggle-run="${item.run_id}" aria-expanded="${isOpen}">
-              <span class="mono feed-time">${escapeHtml(shortKst(item.time_kst))}</span>
+              <span class="num-display feed-time">${escapeHtml(shortKst(item.time_kst))}</span>
               <span class="badge-action ${actLower}">${dec.action}</span>
               <span class="feed-headline">${escapeHtml(dec.headline)}</span>
-              <span class="mono feed-price">${fmtKrw(item.spot_price)}</span>
-              <span class="mono feed-ret ${signClass(item.return_pct)}">${fmtPct(item.return_pct)}</span>
+              <span class="num-display feed-price">${fmtKrw(item.spot_price)}</span>
+              <span class="num-display feed-ret ${signClass(item.return_pct)}">${fmtPct(item.return_pct)}</span>
             </button>
             <div class="feed-details ${isOpen ? "" : "hidden"}">
               <p>${escapeHtml(dec.briefing_summary)}</p>
               <ul class="factor-list">${factorsHtml}</ul>
-              ${tradeSummary ? `<p style="margin-top:8px"><strong>체결 기록:</strong> <span class="mono">${escapeHtml(tradeSummary)}</span></p>` : ""}
+              ${tradeSummary ? `<p style="margin-top:8px"><strong>체결 기록:</strong> <span class="num-display">${escapeHtml(tradeSummary)}</span></p>` : ""}
               ${item.guardrail_note ? `<p><strong>가드레일:</strong> ${escapeHtml(item.guardrail_note)}</p>` : ""}
-              <div class="feed-detail-grid mono">
+              <div class="feed-detail-grid num-display">
                 <span>엔진: ${escapeHtml(dec.model_name)}</span>
                 <span>신뢰도: ${dec.confidence}%</span>
                 <span>RSI: ${Number(item.indicators.rsi14).toFixed(1)}</span>

@@ -8,20 +8,25 @@
     name="description"
     content="GitHub Actions로 매 1시간마다 업비트 KRW-SOL 시장을 분석해 모의 단타 매매 결정을 내리고 누적 성과와 한국어 브리핑을 기록하는 라이브 대시보드입니다."
   />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
-    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/gh/fonts-archive/Paperlogy/subsets/Paperlogy-dynamic-subset.css"
+  />
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap"
     rel="stylesheet"
   />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div class="page-shell">
-    <!-- Editorial Masthead -->
+    <!-- Modern Fintech Masthead -->
     <header class="masthead" id="masthead">
       <div class="masthead-left">
-        <p class="masthead-kicker">UPBIT KRW-SOL · PAPER TRADING LEDGER · HOURLY AUTOMATION</p>
+        <p class="masthead-kicker">UPBIT KRW-SOL · HOURLY AI PAPER TRADING DESK</p>
         <h1 class="masthead-title">SOL/KRW 시간별 AI 단타 브리핑</h1>
       </div>
 
@@ -29,8 +34,8 @@
         <div class="ticker-strip" id="live-ticker">
           <div class="ticker-item">
             <span class="ticker-label">SOL 현재가</span>
-            <strong class="mono ticker-price" id="spot-price">-</strong>
-            <span class="mono ticker-delta" id="spot-change-24h">-</span>
+            <strong class="num-display ticker-price" id="spot-price">-</strong>
+            <span class="num-display ticker-delta" id="spot-change-24h">-</span>
           </div>
           <div class="ticker-divider" aria-hidden="true"></div>
           <div class="ticker-item">
@@ -40,7 +45,7 @@
           <div class="ticker-divider" aria-hidden="true"></div>
           <div class="ticker-item">
             <span class="ticker-label">마지막 갱신 (KST)</span>
-            <span class="mono ticker-time" id="last-updated">-</span>
+            <span class="num-display ticker-time" id="last-updated">-</span>
           </div>
         </div>
 
@@ -59,67 +64,67 @@
 
     <!-- Hero KPI Ledger Strip -->
     <section class="kpi-strip" aria-label="핵심 성과 요약">
-      <article class="kpi-cell">
+      <article class="kpi-cell kpi-cell--hero">
         <div class="kpi-head">
           <span class="kpi-label">총 평가자산</span>
-          <span class="mono kpi-sub-badge" id="kpi-run-count">0회 실행</span>
+          <span class="num-display kpi-sub-badge" id="kpi-run-count">0회 누적</span>
         </div>
-        <div class="mono kpi-value" id="kpi-equity">-</div>
+        <div class="num-display kpi-value" id="kpi-equity">-</div>
         <div class="kpi-meta">
-          <span class="mono kpi-delta" id="kpi-return">-</span>
-          <span class="mono kpi-secondary" id="kpi-pnl">초기 1,000만 원</span>
+          <span class="num-display kpi-delta" id="kpi-return">-</span>
+          <span class="num-display kpi-secondary" id="kpi-pnl">초기 1,000만 원</span>
         </div>
       </article>
 
       <article class="kpi-cell">
         <div class="kpi-head">
           <span class="kpi-label">단순 보유(B&amp;H) 대비</span>
-          <span class="kpi-sub-label">초과수익 (Alpha)</span>
+          <span class="kpi-sub-label">초과수익 Alpha</span>
         </div>
-        <div class="mono kpi-value" id="kpi-alpha">-</div>
+        <div class="num-display kpi-value" id="kpi-alpha">-</div>
         <div class="kpi-meta">
-          <span class="mono kpi-secondary" id="kpi-bm-return">B&amp;H -</span>
-          <span class="mono kpi-secondary" id="kpi-bm-equity">-</span>
+          <span class="num-display kpi-secondary" id="kpi-bm-return">B&amp;H -</span>
+          <span class="num-display kpi-secondary" id="kpi-bm-equity">-</span>
         </div>
       </article>
 
       <article class="kpi-cell">
         <div class="kpi-head">
           <span class="kpi-label">현재 SOL 포지션</span>
-          <span class="mono kpi-sub-badge" id="kpi-exposure-pct">비중 0.0%</span>
+          <span class="num-display kpi-sub-badge" id="kpi-exposure-pct">비중 0.0%</span>
         </div>
-        <div class="mono kpi-value" id="kpi-sol-value">-</div>
+        <div class="num-display kpi-value" id="kpi-sol-value">-</div>
         <div class="exposure-track" aria-hidden="true">
           <div class="exposure-fill" id="kpi-exposure-bar" style="width: 0%"></div>
           <div class="exposure-cap-mark" style="left: 70%" title="최대 허용 비중 70%"></div>
         </div>
         <div class="kpi-meta">
-          <span class="mono kpi-secondary" id="kpi-sol-qty">0.0000 SOL</span>
-          <span class="mono kpi-secondary" id="kpi-unrealized">미실현 -</span>
+          <span class="num-display kpi-secondary" id="kpi-sol-qty">0.0000 SOL</span>
+          <span class="num-display kpi-secondary" id="kpi-unrealized">미실현 -</span>
         </div>
       </article>
 
       <article class="kpi-cell">
         <div class="kpi-head">
           <span class="kpi-label">리스크 &amp; 체결 지표</span>
-          <span class="mono kpi-sub-badge" id="kpi-trade-count">0건 체결</span>
+          <span class="num-display kpi-sub-badge" id="kpi-trade-count">0건 체결</span>
         </div>
         <div class="kpi-mini-grid">
           <div>
             <span class="mini-label">최대낙폭 (MDD)</span>
-            <strong class="mono mini-val" id="kpi-mdd">0.00%</strong>
+            <strong class="num-display mini-val" id="kpi-mdd">0.00%</strong>
           </div>
           <div>
             <span class="mini-label">승률</span>
-            <strong class="mono mini-val" id="kpi-winrate">-</strong>
+            <strong class="num-display mini-val" id="kpi-winrate">-</strong>
           </div>
           <div>
             <span class="mini-label">누적 수수료</span>
-            <strong class="mono mini-val" id="kpi-fees">0원</strong>
+            <strong class="num-display mini-val" id="kpi-fees">0원</strong>
           </div>
           <div>
             <span class="mini-label">샤프 비율</span>
-            <strong class="mono mini-val" id="kpi-sharpe">-</strong>
+            <strong class="num-display mini-val" id="kpi-sharpe">-</strong>
           </div>
         </div>
       </article>
@@ -157,33 +162,33 @@
         <div class="indicator-bar" id="indicator-bar" aria-label="주요 기술적 지표">
           <div class="ind-cell">
             <span class="ind-label">RSI (14)</span>
-            <strong class="mono ind-val" id="ind-rsi">-</strong>
+            <strong class="num-display ind-val" id="ind-rsi">-</strong>
             <span class="ind-sub" id="ind-rsi-note">-</span>
           </div>
           <div class="ind-cell">
             <span class="ind-label">추세 (1h / 4h)</span>
             <strong class="ind-val" id="ind-trend">-</strong>
-            <span class="mono ind-sub" id="ind-ema21">EMA21 -</span>
+            <span class="num-display ind-sub" id="ind-ema21">EMA21 -</span>
           </div>
           <div class="ind-cell">
             <span class="ind-label">MACD 히스토그램</span>
-            <strong class="mono ind-val" id="ind-macd">-</strong>
+            <strong class="num-display ind-val" id="ind-macd">-</strong>
             <span class="ind-sub" id="ind-macd-note">-</span>
           </div>
           <div class="ind-cell">
             <span class="ind-label">볼린저 %B / ATR</span>
-            <strong class="mono ind-val" id="ind-bb">-</strong>
-            <span class="mono ind-sub" id="ind-atr">ATR -</span>
+            <strong class="num-display ind-val" id="ind-bb">-</strong>
+            <span class="num-display ind-sub" id="ind-atr">ATR -</span>
           </div>
           <div class="ind-cell">
             <span class="ind-label">VWAP 괴리 / 거래량</span>
-            <strong class="mono ind-val" id="ind-vwap">-</strong>
-            <span class="mono ind-sub" id="ind-vol">Vol -</span>
+            <strong class="num-display ind-val" id="ind-vwap">-</strong>
+            <span class="num-display ind-sub" id="ind-vol">Vol -</span>
           </div>
           <div class="ind-cell">
             <span class="ind-label">정량 점수 / 호가</span>
-            <strong class="mono ind-val" id="ind-qscore">-</strong>
-            <span class="mono ind-sub" id="ind-ob">OB -</span>
+            <strong class="num-display ind-val" id="ind-qscore">-</strong>
+            <span class="num-display ind-sub" id="ind-ob">OB -</span>
           </div>
         </div>
       </section>
@@ -193,7 +198,7 @@
         <div class="panel-header">
           <div>
             <h2 class="panel-title">최신 정각 브리핑</h2>
-            <p class="mono panel-subtitle" id="briefing-time">-</p>
+            <p class="num-display panel-subtitle" id="briefing-time">-</p>
           </div>
           <span class="regime-tag" id="briefing-regime">-</span>
         </div>
@@ -201,12 +206,12 @@
         <div class="decision-banner" id="decision-banner">
           <div class="decision-stamp-wrap">
             <span class="decision-stamp" id="decision-action">-</span>
-            <span class="mono decision-order-pct" id="decision-order-pct"></span>
+            <span class="num-display decision-order-pct" id="decision-order-pct"></span>
           </div>
           <div class="confidence-block">
             <div class="confidence-row">
               <span class="confidence-label">신뢰도</span>
-              <strong class="mono" id="decision-confidence">-</strong>
+              <strong class="num-display" id="decision-confidence">-</strong>
             </div>
             <div class="confidence-track">
               <div class="confidence-fill" id="decision-confidence-bar" style="width: 0%"></div>
@@ -237,19 +242,19 @@
         <div class="position-guardrails" id="position-guardrails">
           <div>
             <span class="mini-label">평균 매수가</span>
-            <strong class="mono" id="pos-avg-entry">-</strong>
+            <strong class="num-display" id="pos-avg-entry">-</strong>
           </div>
           <div>
             <span class="mini-label">자동 손절가 (SL)</span>
-            <strong class="mono" id="pos-sl">-</strong>
+            <strong class="num-display" id="pos-sl">-</strong>
           </div>
           <div>
             <span class="mini-label">자동 익절가 (TP)</span>
-            <strong class="mono" id="pos-tp">-</strong>
+            <strong class="num-display" id="pos-tp">-</strong>
           </div>
           <div>
             <span class="mini-label">보유 현금 (KRW)</span>
-            <strong class="mono" id="pos-cash">-</strong>
+            <strong class="num-display" id="pos-cash">-</strong>
           </div>
         </div>
       </section>
@@ -312,19 +317,19 @@
             <h3>시뮬레이션 체결 환경</h3>
             <ul class="rule-list" id="rules-execution">
               <li>시장 및 시세: 업비트 공개 API <code>KRW-SOL</code> 1시간봉·4시간봉·실시간 호가 (장애 시 빗썸 자동 폴백)</li>
-              <li>초기 가상 시드머니: <strong class="mono">10,000,000원</strong> (현물 전용, 레버리지·공매도 불가)</li>
-              <li>거래 수수료: 체결 금액의 <strong class="mono">0.05%</strong> (업비트 원화 마켓 기준)</li>
-              <li>슬리피지 반영: 기본 <strong class="mono">0.03% (3 bps)</strong> 또는 실시간 호가 스프레드의 절반 중 큰 값 적용</li>
+              <li>초기 가상 시드머니: <strong class="num-display">10,000,000원</strong> (현물 전용, 레버리지·공매도 불가)</li>
+              <li>거래 수수료: 체결 금액의 <strong class="num-display">0.05%</strong> (업비트 원화 마켓 기준)</li>
+              <li>슬리피지 반영: 기본 <strong class="num-display">0.03% (3 bps)</strong> 또는 실시간 호가 스프레드의 절반 중 큰 값 적용</li>
               <li>벤치마크: 최초 실행 시점에 1,000만 원을 SOL에 일괄 매수해 보유한 <strong>Buy &amp; Hold</strong>와 매시간 비교</li>
             </ul>
           </div>
           <div class="rule-block">
             <h3>강제 리스크 가드레일</h3>
             <ul class="rule-list">
-              <li>최대 단일 종목 비중: 총 평가자산의 <strong class="mono">70%</strong> 상한 (항상 최소 30% 원화 완충)</li>
-              <li>장중 손절/익절 감시: 매시간 실행 시 직전 1시간봉의 고가·저가를 검사해 손절(<strong class="mono">-1.5% ~ -5.0%</strong>) 또는 익절(<strong class="mono">+2.0% ~ +10.0%</strong>) 도달 시 자동 체결</li>
+              <li>최대 단일 종목 비중: 총 평가자산의 <strong class="num-display">70%</strong> 상한 (항상 최소 30% 원화 완충)</li>
+              <li>장중 손절/익절 감시: 매시간 실행 시 직전 1시간봉의 고가·저가를 검사해 손절(<strong class="num-display">-1.5% ~ -5.0%</strong>) 또는 익절(<strong class="num-display">+2.0% ~ +10.0%</strong>) 도달 시 자동 체결</li>
               <li>손절 직후 쿨다운: 장중 손절 체결 시 동일 회차 즉시 재진입(뇌동매매) 차단</li>
-              <li>일일 서킷브레이커: 당일(KST 00시 기준) 누적 평가손실이 <strong class="mono">-5.0%</strong>를 초과하면 당일 신규 매수 전면 차단</li>
+              <li>일일 서킷브레이커: 당일(KST 00시 기준) 누적 평가손실이 <strong class="num-display">-5.0%</strong>를 초과하면 당일 신규 매수 전면 차단</li>
               <li>엔진 이중화: <code>GEMINI_API_KEY</code> 설정 시 Gemini AI가 판단하며, 미설정 또는 API 오류 시 정량 멀티팩터 전략으로 자동 폴백</li>
             </ul>
           </div>
