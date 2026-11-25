@@ -1,0 +1,2 @@
+# Zero third-party runtime dependencies required — pure Python 3.12 standard library.
+# This keeps GitHub Actions hourly runs fast (~10s) and immune to dependency breakage.
