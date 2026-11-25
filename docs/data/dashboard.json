@@ -1,0 +1,871 @@
+{
+  "generated_at_kst": "2026-11-26 00:29:57 KST",
+  "generated_at_utc": "2026-11-25T15:29:57Z",
+  "meta": {
+    "market": "KRW-SOL",
+    "asset": "SOL",
+    "quote": "KRW",
+    "exchange_source": "upbit",
+    "initial_capital_krw": 10000000.0,
+    "fee_rate_pct": 0.05,
+    "base_slippage_bps": 3.0,
+    "max_position_ratio_pct": 70.0,
+    "min_order_krw": 10000.0,
+    "daily_loss_limit_pct": 5.0,
+    "stop_loss_range_pct": [
+      1.5,
+      5.0
+    ],
+    "take_profit_range_pct": [
+      2.0,
+      10.0
+    ]
+  },
+  "market": {
+    "spot_price": 91500.0,
+    "change_24h_pct": -3.583,
+    "change_24h_krw": -3400.0,
+    "high_24h": 95200.0,
+    "low_24h": 90000.0,
+    "volume_24h_sol": 336371.3518,
+    "turnover_24h_krw": 31192083186.0,
+    "spread_bps": 10.94,
+    "orderbook_imbalance": 0.1928
+  },
+  "indicators": {
+    "spot_price": 91500.0,
+    "last_closed_candle_kst": "2026-11-25 23:00:00 KST",
+    "last_closed_close": 92050.0,
+    "ret_1h_pct": -0.6,
+    "ret_4h_pct": -0.38,
+    "ret_24h_pct": -3.58,
+    "ret_72h_pct": -4.69,
+    "ema9": 92344.8,
+    "ema21": 93335.0,
+    "ema50": 94878.7,
+    "ema200": 96832.8,
+    "ema_alignment": "bearish",
+    "rsi14": 38.74,
+    "rsi14_prev": 31.67,
+    "macd_line": -1098.02,
+    "macd_signal": -1052.12,
+    "macd_hist": -45.9,
+    "macd_hist_delta": 43.22,
+    "bb_upper": 95615.7,
+    "bb_mid": 93357.5,
+    "bb_lower": 91099.3,
+    "bb_width_pct": 4.84,
+    "bb_percent_b": 0.21,
+    "atr14": 1096.4,
+    "atr14_pct": 1.19,
+    "vwap_24h": 93008.2,
+    "dist_from_vwap_pct": -1.62,
+    "volume_ratio_24h": 3.94,
+    "volume_zscore_24h": 4.89,
+    "spread_bps": 10.94,
+    "orderbook_imbalance": 0.193,
+    "support_48h": 90000.0,
+    "resistance_48h": 104500.0,
+    "htf_ema21": 95758.1,
+    "htf_ema50": 96901.1,
+    "htf_rsi14": 35.32,
+    "htf_trend": "downtrend",
+    "regime": "downtrend",
+    "regime_kr": "하락 추세",
+    "quant_score": -36.8
+  },
+  "summary": {
+    "total_equity_krw": 10000000.0,
+    "total_pnl_krw": 0.0,
+    "total_return_pct": 0.0,
+    "daily_return_pct": 0.0,
+    "benchmark_equity_krw": 9995000.0,
+    "benchmark_return_pct": -0.05,
+    "alpha_pp": 0.05,
+    "cash_krw": 10000000.0,
+    "sol_qty": 0.0,
+    "sol_value_krw": 0.0,
+    "exposure_pct": 0.0,
+    "avg_entry_price_krw": 0.0,
+    "unrealized_pnl_krw": 0.0,
+    "unrealized_pnl_pct": 0.0,
+    "realized_pnl_krw": 0.0,
+    "stop_loss_price_krw": null,
+    "take_profit_price_krw": null,
+    "entry_time_kst": null,
+    "cumulative_fees_krw": 0.0,
+    "max_drawdown_pct": 0.0,
+    "current_drawdown_pct": 0.0,
+    "win_rate_pct": null,
+    "profit_factor": null,
+    "sharpe_ratio": null,
+    "total_trades": 0,
+    "buy_trades": 0,
+    "sell_trades": 0,
+    "closed_trades": 0,
+    "winning_trades": 0,
+    "losing_trades": 0,
+    "daily_circuit_breaker_active": false,
+    "run_count": 1,
+    "started_at_kst": "2026-11-26 00:29:57 KST",
+    "last_run_kst": "2026-11-26 00:29:57 KST"
+  },
+  "latest_briefing": {
+    "run_id": 1,
+    "time_kst": "2026-11-26 00:29:57 KST",
+    "time_utc": "2026-11-25T15:29:57Z",
+    "spot_price": 91500.0,
+    "change_24h_pct": -3.583,
+    "equity_krw": 10000000.0,
+    "benchmark_krw": 9995000.0,
+    "return_pct": 0.0,
+    "benchmark_return_pct": -0.05,
+    "cash_krw": 10000000.0,
+    "sol_qty": 0.0,
+    "exposure_pct": 0.0,
+    "indicators": {
+      "spot_price": 91500.0,
+      "last_closed_candle_kst": "2026-11-25 23:00:00 KST",
+      "last_closed_close": 92050.0,
+      "ret_1h_pct": -0.6,
+      "ret_4h_pct": -0.38,
+      "ret_24h_pct": -3.58,
+      "ret_72h_pct": -4.69,
+      "ema9": 92344.8,
+      "ema21": 93335.0,
+      "ema50": 94878.7,
+      "ema200": 96832.8,
+      "ema_alignment": "bearish",
+      "rsi14": 38.74,
+      "rsi14_prev": 31.67,
+      "macd_line": -1098.02,
+      "macd_signal": -1052.12,
+      "macd_hist": -45.9,
+      "macd_hist_delta": 43.22,
+      "bb_upper": 95615.7,
+      "bb_mid": 93357.5,
+      "bb_lower": 91099.3,
+      "bb_width_pct": 4.84,
+      "bb_percent_b": 0.21,
+      "atr14": 1096.4,
+      "atr14_pct": 1.19,
+      "vwap_24h": 93008.2,
+      "dist_from_vwap_pct": -1.62,
+      "volume_ratio_24h": 3.94,
+      "volume_zscore_24h": 4.89,
+      "spread_bps": 10.94,
+      "orderbook_imbalance": 0.193,
+      "support_48h": 90000.0,
+      "resistance_48h": 104500.0,
+      "htf_ema21": 95758.1,
+      "htf_ema50": 96901.1,
+      "htf_rsi14": 35.32,
+      "htf_trend": "downtrend",
+      "regime": "downtrend",
+      "regime_kr": "하락 추세",
+      "quant_score": -36.8
+    },
+    "decision": {
+      "action": "HOLD",
+      "order_pct": 0.0,
+      "confidence": 66,
+      "stop_loss_pct": 2.5,
+      "take_profit_pct": 4.5,
+      "headline": "방향성 모호(점수 -36.8) — 현금 관망 유지",
+      "briefing_summary": "현재 업비트 KRW-SOL은 91,500원(24시간 -3.58%)로 하락 추세 흐름을 보이고 있습니다. 1시간봉은 역배열(EMA9<21<50), 4시간 상위 추세는 하락 추세이며 RSI(14)는 38.7(직전 31.7)입니다. 복합 정량 점수(-36.8점)가 진입/청산 임계치에 미달하여 불필요한 수수료 소모를 피하고 현 포지션을 유지합니다.",
+      "key_factors": [
+        "추세 구조: 1시간봉 역배열(EMA9<21<50) / 4시간봉 하락 추세 (EMA21 93,335원)",
+        "모멘텀: RSI(14) 38.7, MACD 히스토그램 -45.9 (직전 대비 개선)",
+        "변동성·밴드: 볼린저 %B 0.21, ATR(14) 1.19%, 24h VWAP 대비 -1.62%",
+        "수급·체결: 직전 1시간 거래량 평균 대비 3.94배, 호가 불균형 +0.19"
+      ],
+      "risk_notes": "최근 48시간 단기 지지선은 90,000원, 저항선은 104,500원입니다. 시간당 변동성(ATR 1.19%)을 감안해 지지선 이탈 시 추가 변동성 확대에 유의해야 합니다.",
+      "next_watch": "다음 1시간 동안 93,335원(1h EMA21) 안착 여부와 104,500원 돌파 시 거래량 동반 여부를 중점 관찰합니다.",
+      "engine": "quant_fallback",
+      "model_name": "quant-multifactor-v1",
+      "fallback_reason": "GEMINI_API_KEY 미설정 — 정량 멀티팩터 전략으로 자동 실행"
+    },
+    "guardrail_note": null,
+    "intrabar_event": null,
+    "executed_trades": [],
+    "executed_sides": []
+  },
+  "series": [
+    {
+      "time_kst": "2026-11-26 00:29:57 KST",
+      "time_utc": "2026-11-25T15:29:57Z",
+      "spot_price": 91500.0,
+      "equity_krw": 10000000.0,
+      "benchmark_krw": 9995000.0,
+      "return_pct": 0.0,
+      "benchmark_return_pct": -0.05,
+      "exposure_pct": 0.0,
+      "ema21": 93335.0,
+      "ema50": 94878.7,
+      "rsi14": 38.74,
+      "action": "HOLD",
+      "executed_sides": []
+    }
+  ],
+  "candles_recent": [
+    {
+      "time_kst": "2026-11-23 00:00:00 KST",
+      "open": 96000.0,
+      "high": 96250.0,
+      "low": 95750.0,
+      "close": 96000.0,
+      "volume": 3211.17
+    },
+    {
+      "time_kst": "2026-11-23 01:00:00 KST",
+      "open": 96000.0,
+      "high": 96750.0,
+      "low": 95850.0,
+      "close": 96750.0,
+      "volume": 5502.83
+    },
+    {
+      "time_kst": "2026-11-23 02:00:00 KST",
+      "open": 96600.0,
+      "high": 96600.0,
+      "low": 96050.0,
+      "close": 96100.0,
+      "volume": 1656.15
+    },
+    {
+      "time_kst": "2026-11-23 03:00:00 KST",
+      "open": 96100.0,
+      "high": 96200.0,
+      "low": 95800.0,
+      "close": 96000.0,
+      "volume": 2097.46
+    },
+    {
+      "time_kst": "2026-11-23 04:00:00 KST",
+      "open": 96100.0,
+      "high": 96200.0,
+      "low": 95800.0,
+      "close": 95950.0,
+      "volume": 2136.47
+    },
+    {
+      "time_kst": "2026-11-23 05:00:00 KST",
+      "open": 95950.0,
+      "high": 95950.0,
+      "low": 95400.0,
+      "close": 95800.0,
+      "volume": 2213.4
+    },
+    {
+      "time_kst": "2026-11-23 06:00:00 KST",
+      "open": 95800.0,
+      "high": 96300.0,
+      "low": 95700.0,
+      "close": 96050.0,
+      "volume": 2633.63
+    },
+    {
+      "time_kst": "2026-11-23 07:00:00 KST",
+      "open": 96150.0,
+      "high": 96200.0,
+      "low": 95450.0,
+      "close": 95950.0,
+      "volume": 10496.91
+    },
+    {
+      "time_kst": "2026-11-23 08:00:00 KST",
+      "open": 96000.0,
+      "high": 96600.0,
+      "low": 95850.0,
+      "close": 96450.0,
+      "volume": 9043.38
+    },
+    {
+      "time_kst": "2026-11-23 09:00:00 KST",
+      "open": 96500.0,
+      "high": 96600.0,
+      "low": 96000.0,
+      "close": 96400.0,
+      "volume": 9555.69
+    },
+    {
+      "time_kst": "2026-11-23 10:00:00 KST",
+      "open": 96400.0,
+      "high": 96550.0,
+      "low": 96000.0,
+      "close": 96100.0,
+      "volume": 7880.03
+    },
+    {
+      "time_kst": "2026-11-23 11:00:00 KST",
+      "open": 96100.0,
+      "high": 96250.0,
+      "low": 95250.0,
+      "close": 95850.0,
+      "volume": 8003.83
+    },
+    {
+      "time_kst": "2026-11-23 12:00:00 KST",
+      "open": 95850.0,
+      "high": 97750.0,
+      "low": 95800.0,
+      "close": 97400.0,
+      "volume": 28078.72
+    },
+    {
+      "time_kst": "2026-11-23 13:00:00 KST",
+      "open": 97400.0,
+      "high": 97700.0,
+      "low": 97050.0,
+      "close": 97400.0,
+      "volume": 6684.69
+    },
+    {
+      "time_kst": "2026-11-23 14:00:00 KST",
+      "open": 97350.0,
+      "high": 98600.0,
+      "low": 97100.0,
+      "close": 98050.0,
+      "volume": 10912.02
+    },
+    {
+      "time_kst": "2026-11-23 15:00:00 KST",
+      "open": 98050.0,
+      "high": 98500.0,
+      "low": 97650.0,
+      "close": 98250.0,
+      "volume": 10022.3
+    },
+    {
+      "time_kst": "2026-11-23 16:00:00 KST",
+      "open": 98250.0,
+      "high": 98700.0,
+      "low": 98050.0,
+      "close": 98100.0,
+      "volume": 11511.67
+    },
+    {
+      "time_kst": "2026-11-23 17:00:00 KST",
+      "open": 98200.0,
+      "high": 98950.0,
+      "low": 98000.0,
+      "close": 98700.0,
+      "volume": 18809.51
+    },
+    {
+      "time_kst": "2026-11-23 18:00:00 KST",
+      "open": 98700.0,
+      "high": 99300.0,
+      "low": 98400.0,
+      "close": 98650.0,
+      "volume": 9005.07
+    },
+    {
+      "time_kst": "2026-11-23 19:00:00 KST",
+      "open": 98800.0,
+      "high": 98900.0,
+      "low": 98400.0,
+      "close": 98600.0,
+      "volume": 8208.63
+    },
+    {
+      "time_kst": "2026-11-23 20:00:00 KST",
+      "open": 98600.0,
+      "high": 99300.0,
+      "low": 98350.0,
+      "close": 99000.0,
+      "volume": 6215.33
+    },
+    {
+      "time_kst": "2026-11-23 21:00:00 KST",
+      "open": 98950.0,
+      "high": 99000.0,
+      "low": 97900.0,
+      "close": 98400.0,
+      "volume": 16209.12
+    },
+    {
+      "time_kst": "2026-11-23 22:00:00 KST",
+      "open": 98400.0,
+      "high": 104400.0,
+      "low": 98300.0,
+      "close": 104200.0,
+      "volume": 43665.98
+    },
+    {
+      "time_kst": "2026-11-23 23:00:00 KST",
+      "open": 104300.0,
+      "high": 106500.0,
+      "low": 102200.0,
+      "close": 103800.0,
+      "volume": 151564.0
+    },
+    {
+      "time_kst": "2026-11-24 00:00:00 KST",
+      "open": 103900.0,
+      "high": 104500.0,
+      "low": 102500.0,
+      "close": 103000.0,
+      "volume": 25136.99
+    },
+    {
+      "time_kst": "2026-11-24 01:00:00 KST",
+      "open": 102900.0,
+      "high": 103400.0,
+      "low": 100400.0,
+      "close": 101600.0,
+      "volume": 25647.35
+    },
+    {
+      "time_kst": "2026-11-24 02:00:00 KST",
+      "open": 101700.0,
+      "high": 101700.0,
+      "low": 99900.0,
+      "close": 100300.0,
+      "volume": 10139.22
+    },
+    {
+      "time_kst": "2026-11-24 03:00:00 KST",
+      "open": 100400.0,
+      "high": 100700.0,
+      "low": 99800.0,
+      "close": 99900.0,
+      "volume": 4027.11
+    },
+    {
+      "time_kst": "2026-11-24 04:00:00 KST",
+      "open": 99800.0,
+      "high": 100400.0,
+      "low": 98750.0,
+      "close": 99700.0,
+      "volume": 7328.59
+    },
+    {
+      "time_kst": "2026-11-24 05:00:00 KST",
+      "open": 99750.0,
+      "high": 100200.0,
+      "low": 99150.0,
+      "close": 99400.0,
+      "volume": 5608.53
+    },
+    {
+      "time_kst": "2026-11-24 06:00:00 KST",
+      "open": 99550.0,
+      "high": 99700.0,
+      "low": 98450.0,
+      "close": 99000.0,
+      "volume": 7666.97
+    },
+    {
+      "time_kst": "2026-11-24 07:00:00 KST",
+      "open": 99000.0,
+      "high": 99100.0,
+      "low": 97850.0,
+      "close": 98250.0,
+      "volume": 8580.99
+    },
+    {
+      "time_kst": "2026-11-24 08:00:00 KST",
+      "open": 98250.0,
+      "high": 98700.0,
+      "low": 98000.0,
+      "close": 98400.0,
+      "volume": 14184.15
+    },
+    {
+      "time_kst": "2026-11-24 09:00:00 KST",
+      "open": 98400.0,
+      "high": 98500.0,
+      "low": 97950.0,
+      "close": 98300.0,
+      "volume": 9642.78
+    },
+    {
+      "time_kst": "2026-11-24 10:00:00 KST",
+      "open": 98300.0,
+      "high": 99150.0,
+      "low": 97900.0,
+      "close": 97900.0,
+      "volume": 21854.18
+    },
+    {
+      "time_kst": "2026-11-24 11:00:00 KST",
+      "open": 97950.0,
+      "high": 98350.0,
+      "low": 96650.0,
+      "close": 96750.0,
+      "volume": 21988.22
+    },
+    {
+      "time_kst": "2026-11-24 12:00:00 KST",
+      "open": 96750.0,
+      "high": 97300.0,
+      "low": 95700.0,
+      "close": 97250.0,
+      "volume": 27152.86
+    },
+    {
+      "time_kst": "2026-11-24 13:00:00 KST",
+      "open": 97250.0,
+      "high": 98150.0,
+      "low": 97200.0,
+      "close": 97300.0,
+      "volume": 9236.61
+    },
+    {
+      "time_kst": "2026-11-24 14:00:00 KST",
+      "open": 97300.0,
+      "high": 98050.0,
+      "low": 97250.0,
+      "close": 97650.0,
+      "volume": 13283.29
+    },
+    {
+      "time_kst": "2026-11-24 15:00:00 KST",
+      "open": 97700.0,
+      "high": 97950.0,
+      "low": 97200.0,
+      "close": 97850.0,
+      "volume": 9807.21
+    },
+    {
+      "time_kst": "2026-11-24 16:00:00 KST",
+      "open": 97800.0,
+      "high": 97900.0,
+      "low": 97250.0,
+      "close": 97250.0,
+      "volume": 3342.52
+    },
+    {
+      "time_kst": "2026-11-24 17:00:00 KST",
+      "open": 97250.0,
+      "high": 97450.0,
+      "low": 96600.0,
+      "close": 96750.0,
+      "volume": 11091.75
+    },
+    {
+      "time_kst": "2026-11-24 18:00:00 KST",
+      "open": 96750.0,
+      "high": 96800.0,
+      "low": 96100.0,
+      "close": 96350.0,
+      "volume": 8323.74
+    },
+    {
+      "time_kst": "2026-11-24 19:00:00 KST",
+      "open": 96350.0,
+      "high": 96600.0,
+      "low": 95400.0,
+      "close": 95950.0,
+      "volume": 15322.59
+    },
+    {
+      "time_kst": "2026-11-24 20:00:00 KST",
+      "open": 95950.0,
+      "high": 96700.0,
+      "low": 95350.0,
+      "close": 96650.0,
+      "volume": 12042.83
+    },
+    {
+      "time_kst": "2026-11-24 21:00:00 KST",
+      "open": 96650.0,
+      "high": 96700.0,
+      "low": 96000.0,
+      "close": 96350.0,
+      "volume": 9586.48
+    },
+    {
+      "time_kst": "2026-11-24 22:00:00 KST",
+      "open": 96350.0,
+      "high": 96550.0,
+      "low": 95000.0,
+      "close": 95150.0,
+      "volume": 19348.32
+    },
+    {
+      "time_kst": "2026-11-24 23:00:00 KST",
+      "open": 95150.0,
+      "high": 96150.0,
+      "low": 94800.0,
+      "close": 95550.0,
+      "volume": 19976.61
+    },
+    {
+      "time_kst": "2026-11-25 00:00:00 KST",
+      "open": 95400.0,
+      "high": 95550.0,
+      "low": 93650.0,
+      "close": 94200.0,
+      "volume": 29701.42
+    },
+    {
+      "time_kst": "2026-11-25 01:00:00 KST",
+      "open": 94200.0,
+      "high": 94550.0,
+      "low": 93500.0,
+      "close": 94200.0,
+      "volume": 7535.86
+    },
+    {
+      "time_kst": "2026-11-25 02:00:00 KST",
+      "open": 94250.0,
+      "high": 95150.0,
+      "low": 94000.0,
+      "close": 94900.0,
+      "volume": 5229.86
+    },
+    {
+      "time_kst": "2026-11-25 03:00:00 KST",
+      "open": 94850.0,
+      "high": 95150.0,
+      "low": 94450.0,
+      "close": 94450.0,
+      "volume": 2098.37
+    },
+    {
+      "time_kst": "2026-11-25 04:00:00 KST",
+      "open": 94450.0,
+      "high": 94700.0,
+      "low": 94050.0,
+      "close": 94100.0,
+      "volume": 4186.99
+    },
+    {
+      "time_kst": "2026-11-25 05:00:00 KST",
+      "open": 94100.0,
+      "high": 94850.0,
+      "low": 93850.0,
+      "close": 94400.0,
+      "volume": 4608.5
+    },
+    {
+      "time_kst": "2026-11-25 06:00:00 KST",
+      "open": 94400.0,
+      "high": 94850.0,
+      "low": 94300.0,
+      "close": 94550.0,
+      "volume": 2799.85
+    },
+    {
+      "time_kst": "2026-11-25 07:00:00 KST",
+      "open": 94550.0,
+      "high": 95350.0,
+      "low": 94500.0,
+      "close": 95300.0,
+      "volume": 7081.48
+    },
+    {
+      "time_kst": "2026-11-25 08:00:00 KST",
+      "open": 95350.0,
+      "high": 95450.0,
+      "low": 94750.0,
+      "close": 94900.0,
+      "volume": 6929.36
+    },
+    {
+      "time_kst": "2026-11-25 09:00:00 KST",
+      "open": 94950.0,
+      "high": 95200.0,
+      "low": 94550.0,
+      "close": 94800.0,
+      "volume": 12818.33
+    },
+    {
+      "time_kst": "2026-11-25 10:00:00 KST",
+      "open": 94750.0,
+      "high": 94800.0,
+      "low": 93650.0,
+      "close": 93950.0,
+      "volume": 15737.87
+    },
+    {
+      "time_kst": "2026-11-25 11:00:00 KST",
+      "open": 93900.0,
+      "high": 93900.0,
+      "low": 93100.0,
+      "close": 93400.0,
+      "volume": 16480.19
+    },
+    {
+      "time_kst": "2026-11-25 12:00:00 KST",
+      "open": 93450.0,
+      "high": 94600.0,
+      "low": 93000.0,
+      "close": 94100.0,
+      "volume": 12484.48
+    },
+    {
+      "time_kst": "2026-11-25 13:00:00 KST",
+      "open": 94100.0,
+      "high": 94250.0,
+      "low": 93150.0,
+      "close": 93500.0,
+      "volume": 9140.55
+    },
+    {
+      "time_kst": "2026-11-25 14:00:00 KST",
+      "open": 93500.0,
+      "high": 93650.0,
+      "low": 92850.0,
+      "close": 93350.0,
+      "volume": 11893.24
+    },
+    {
+      "time_kst": "2026-11-25 15:00:00 KST",
+      "open": 93350.0,
+      "high": 93800.0,
+      "low": 93050.0,
+      "close": 93600.0,
+      "volume": 8895.74
+    },
+    {
+      "time_kst": "2026-11-25 16:00:00 KST",
+      "open": 93600.0,
+      "high": 93850.0,
+      "low": 92250.0,
+      "close": 92400.0,
+      "volume": 19703.42
+    },
+    {
+      "time_kst": "2026-11-25 17:00:00 KST",
+      "open": 92400.0,
+      "high": 93200.0,
+      "low": 92200.0,
+      "close": 92750.0,
+      "volume": 16969.92
+    },
+    {
+      "time_kst": "2026-11-25 18:00:00 KST",
+      "open": 92750.0,
+      "high": 92750.0,
+      "low": 91800.0,
+      "close": 92150.0,
+      "volume": 19918.75
+    },
+    {
+      "time_kst": "2026-11-25 19:00:00 KST",
+      "open": 92200.0,
+      "high": 92400.0,
+      "low": 92000.0,
+      "close": 92350.0,
+      "volume": 9253.07
+    },
+    {
+      "time_kst": "2026-11-25 20:00:00 KST",
+      "open": 92350.0,
+      "high": 92400.0,
+      "low": 91600.0,
+      "close": 91850.0,
+      "volume": 16440.46
+    },
+    {
+      "time_kst": "2026-11-25 21:00:00 KST",
+      "open": 91850.0,
+      "high": 92600.0,
+      "low": 91800.0,
+      "close": 92450.0,
+      "volume": 11622.82
+    },
+    {
+      "time_kst": "2026-11-25 22:00:00 KST",
+      "open": 92450.0,
+      "high": 92650.0,
+      "low": 91050.0,
+      "close": 91200.0,
+      "volume": 31334.57
+    },
+    {
+      "time_kst": "2026-11-25 23:00:00 KST",
+      "open": 91250.0,
+      "high": 92050.0,
+      "low": 90000.0,
+      "close": 92050.0,
+      "volume": 49717.08
+    }
+  ],
+  "briefings": [
+    {
+      "run_id": 1,
+      "time_kst": "2026-11-26 00:29:57 KST",
+      "time_utc": "2026-11-25T15:29:57Z",
+      "spot_price": 91500.0,
+      "change_24h_pct": -3.583,
+      "equity_krw": 10000000.0,
+      "benchmark_krw": 9995000.0,
+      "return_pct": 0.0,
+      "benchmark_return_pct": -0.05,
+      "cash_krw": 10000000.0,
+      "sol_qty": 0.0,
+      "exposure_pct": 0.0,
+      "indicators": {
+        "spot_price": 91500.0,
+        "last_closed_candle_kst": "2026-11-25 23:00:00 KST",
+        "last_closed_close": 92050.0,
+        "ret_1h_pct": -0.6,
+        "ret_4h_pct": -0.38,
+        "ret_24h_pct": -3.58,
+        "ret_72h_pct": -4.69,
+        "ema9": 92344.8,
+        "ema21": 93335.0,
+        "ema50": 94878.7,
+        "ema200": 96832.8,
+        "ema_alignment": "bearish",
+        "rsi14": 38.74,
+        "rsi14_prev": 31.67,
+        "macd_line": -1098.02,
+        "macd_signal": -1052.12,
+        "macd_hist": -45.9,
+        "macd_hist_delta": 43.22,
+        "bb_upper": 95615.7,
+        "bb_mid": 93357.5,
+        "bb_lower": 91099.3,
+        "bb_width_pct": 4.84,
+        "bb_percent_b": 0.21,
+        "atr14": 1096.4,
+        "atr14_pct": 1.19,
+        "vwap_24h": 93008.2,
+        "dist_from_vwap_pct": -1.62,
+        "volume_ratio_24h": 3.94,
+        "volume_zscore_24h": 4.89,
+        "spread_bps": 10.94,
+        "orderbook_imbalance": 0.193,
+        "support_48h": 90000.0,
+        "resistance_48h": 104500.0,
+        "htf_ema21": 95758.1,
+        "htf_ema50": 96901.1,
+        "htf_rsi14": 35.32,
+        "htf_trend": "downtrend",
+        "regime": "downtrend",
+        "regime_kr": "하락 추세",
+        "quant_score": -36.8
+      },
+      "decision": {
+        "action": "HOLD",
+        "order_pct": 0.0,
+        "confidence": 66,
+        "stop_loss_pct": 2.5,
+        "take_profit_pct": 4.5,
+        "headline": "방향성 모호(점수 -36.8) — 현금 관망 유지",
+        "briefing_summary": "현재 업비트 KRW-SOL은 91,500원(24시간 -3.58%)로 하락 추세 흐름을 보이고 있습니다. 1시간봉은 역배열(EMA9<21<50), 4시간 상위 추세는 하락 추세이며 RSI(14)는 38.7(직전 31.7)입니다. 복합 정량 점수(-36.8점)가 진입/청산 임계치에 미달하여 불필요한 수수료 소모를 피하고 현 포지션을 유지합니다.",
+        "key_factors": [
+          "추세 구조: 1시간봉 역배열(EMA9<21<50) / 4시간봉 하락 추세 (EMA21 93,335원)",
+          "모멘텀: RSI(14) 38.7, MACD 히스토그램 -45.9 (직전 대비 개선)",
+          "변동성·밴드: 볼린저 %B 0.21, ATR(14) 1.19%, 24h VWAP 대비 -1.62%",
+          "수급·체결: 직전 1시간 거래량 평균 대비 3.94배, 호가 불균형 +0.19"
+        ],
+        "risk_notes": "최근 48시간 단기 지지선은 90,000원, 저항선은 104,500원입니다. 시간당 변동성(ATR 1.19%)을 감안해 지지선 이탈 시 추가 변동성 확대에 유의해야 합니다.",
+        "next_watch": "다음 1시간 동안 93,335원(1h EMA21) 안착 여부와 104,500원 돌파 시 거래량 동반 여부를 중점 관찰합니다.",
+        "engine": "quant_fallback",
+        "model_name": "quant-multifactor-v1",
+        "fallback_reason": "GEMINI_API_KEY 미설정 — 정량 멀티팩터 전략으로 자동 실행"
+      },
+      "guardrail_note": null,
+      "intrabar_event": null,
+      "executed_trades": [],
+      "executed_sides": []
+    }
+  ],
+  "trades": []
+}
