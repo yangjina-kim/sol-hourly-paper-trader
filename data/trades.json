@@ -159,5 +159,28 @@
     "realized_pnl_krw": null,
     "realized_pnl_pct": null,
     "reason": "단기 추세 전환(점수 +42.8) — 가용 현금 35% 분할 매수"
+  },
+  {
+    "id": "T0008",
+    "time_kst": "2026-11-27 03:00:14 KST",
+    "time_utc": "2026-11-26T18:00:14Z",
+    "side": "BUY",
+    "trigger": "quant_shortterm",
+    "engine": "quant-shortterm-v2",
+    "spot_price": 96450.0,
+    "exec_price": 96505.41,
+    "slippage_bps": 5.74,
+    "slippage_krw": 1290.0,
+    "slippage_breakdown": {
+      "book_bps": 5.18,
+      "vol_bps": 0.56,
+      "event_bps": 0.0
+    },
+    "sol_qty": 23.285716,
+    "krw_amount": 2248322.0,
+    "fee_krw": 1124.0,
+    "realized_pnl_krw": null,
+    "realized_pnl_pct": null,
+    "reason": "단기 추세 전환(점수 +38.2) — 가용 현금 35% 분할 매수"
   }
 ]
