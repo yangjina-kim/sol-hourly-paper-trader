@@ -113,5 +113,28 @@
     "realized_pnl_krw": null,
     "realized_pnl_pct": null,
     "reason": "단기 추세 전환(점수 +38.1) — 가용 현금 35% 분할 매수"
+  },
+  {
+    "id": "T0006",
+    "time_kst": "2026-11-27 00:13:58 KST",
+    "time_utc": "2026-11-26T15:13:58Z",
+    "side": "SELL",
+    "trigger": "quant_shortterm",
+    "engine": "quant-shortterm-v2",
+    "spot_price": 95500.0,
+    "exec_price": 95446.56,
+    "slippage_bps": 5.6,
+    "slippage_krw": 3183.0,
+    "slippage_breakdown": {
+      "book_bps": 5.24,
+      "vol_bps": 0.36,
+      "event_bps": 0.0
+    },
+    "sol_qty": 59.558014,
+    "krw_amount": 5684608.0,
+    "fee_krw": 2842.0,
+    "realized_pnl_krw": -60385.0,
+    "realized_pnl_pct": -1.05,
+    "reason": "단기 추세 이탈(점수 -43.0) — 보유 물량 전량 청산"
   }
 ]
