@@ -1,4 +1,4 @@
-"""Main hourly execution entrypoint for the SOL/KRW AI paper trading simulator."""
+"""Main hourly execution entrypoint for the SOL/KRW short-term quant paper trading simulator."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .ai_engine import decide_trade
 from .config import DASHBOARD_DATA_PATH, DATA_DIR, HISTORY_PATH, MARKET, README_PATH, STATE_PATH, TRADES_PATH
 from .indicators import compute_indicators
 from .market_data import MarketSnapshot, fetch_market_snapshot
@@ -29,18 +28,29 @@ from .report_builder import (
     update_readme_summary,
     write_github_step_summary,
 )
+from .strategy import decide_trade
+
+
+def _is_same_candle_already_bought(history: list[dict[str, Any]], current_closed_candle_kst: str) -> bool:
+    """Prevent double-buying on the exact same closed 1h candle when GitHub Actions cron jitters."""
+    for entry in reversed(history[-3:]):
+        prev_candle = (entry.get("indicators") or {}).get("last_closed_candle_kst")
+        if prev_candle != current_closed_candle_kst:
+            break
+        if "BUY" in (entry.get("executed_sides") or []):
+            return True
+    return False
 
 
 def run_hourly_cycle(
     *,
     snapshot: MarketSnapshot | None = None,
-    force_quant: bool = False,
     dry_run: bool = False,
     data_dir: Path = DATA_DIR,
     dashboard_path: Path = DASHBOARD_DATA_PATH,
     readme_path: Path = README_PATH,
 ) -> dict[str, Any]:
-    """Execute one complete hourly data -> indicators -> risk check -> decision -> ledger -> report cycle."""
+    """Execute one complete hourly data -> indicators -> risk check -> quant decision -> ledger -> report cycle."""
     if snapshot is None:
         snapshot = fetch_market_snapshot(MARKET)
 
@@ -68,35 +78,30 @@ def run_hourly_cycle(
     # 2. Refresh KST daily drawdown circuit breaker
     refresh_daily_guardrails(state, snapshot.spot_price, snapshot.fetched_at_kst)
 
-    # 3. Build portfolio context & recent decision memory for the decision engine
-    portfolio_ctx = build_portfolio_context(state, snapshot.spot_price, sl_cooldown_active=sl_cooldown_active)
-    recent_decisions = [
-        {
-            "time_kst": h["time_kst"],
-            "spot_price": h["spot_price"],
-            "action": h["decision"]["action"],
-            "confidence": h["decision"]["confidence"],
-            "headline": h["decision"]["headline"],
-        }
-        for h in history[-5:]
-    ]
-
-    # 4. Run Gemini AI decision (or automatic Quant Fallback)
-    decision = decide_trade(
-        snapshot,
-        indicators,
-        portfolio_ctx,
-        recent_decisions,
-        force_quant=force_quant,
+    # 3. Check duplicate-candle guard & build portfolio context
+    same_candle_buy_blocked = _is_same_candle_already_bought(
+        history,
+        str(indicators.get("last_closed_candle_kst", "")),
+    )
+    portfolio_ctx = build_portfolio_context(
+        state,
+        snapshot.spot_price,
+        sl_cooldown_active=sl_cooldown_active,
+        now_kst_str=snapshot.fetched_at_kst,
+        same_candle_buy_blocked=same_candle_buy_blocked,
     )
 
-    # 5. Execute decision with strict paper-trading guardrails
+    # 4. Run pure 1-hour short-term quantitative decision engine
+    decision = decide_trade(snapshot, indicators, portfolio_ctx)
+
+    # 5. Execute decision with strict paper-trading guardrails & 3-layer slippage
     decision_trade, guardrail_note = execute_decision(
         state,
         snapshot,
         decision,
         sl_cooldown_active=sl_cooldown_active,
         atr14_pct=atr14_pct,
+        same_candle_buy_blocked=same_candle_buy_blocked,
     )
     if decision_trade is not None:
         executed_this_cycle.append(decision_trade)
@@ -155,12 +160,7 @@ def run_hourly_cycle(
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Run one hourly KRW-SOL paper trading cycle.")
-    parser.add_argument(
-        "--force-quant",
-        action="store_true",
-        help="Skip Gemini API and run the deterministic multi-factor quant strategy.",
-    )
+    parser = argparse.ArgumentParser(description="Run one hourly KRW-SOL short-term quant paper trading cycle.")
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -168,7 +168,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    payload = run_hourly_cycle(force_quant=args.force_quant, dry_run=args.dry_run)
+    payload = run_hourly_cycle(dry_run=args.dry_run)
     print(render_markdown_briefing(payload))
     if args.dry_run:
         print("\n[dry-run] No files were modified.")

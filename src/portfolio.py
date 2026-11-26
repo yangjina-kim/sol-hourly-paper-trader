@@ -7,9 +7,9 @@ import statistics
 from datetime import datetime, timezone
 from typing import Any
 
-from .ai_engine import TradingDecision
 from .config import (
     BASE_SLIPPAGE_RATE,
+    BREAKEVEN_TRIGGER_PCT,
     DAILY_LOSS_LIMIT_PCT,
     FEE_RATE,
     INITIAL_CAPITAL_KRW,
@@ -25,6 +25,7 @@ from .config import (
     VOL_SLIPPAGE_PER_ATR_PCT,
 )
 from .market_data import Candle, MarketSnapshot
+from .strategy import TradingDecision
 
 
 def create_initial_state(snapshot: MarketSnapshot) -> dict[str, Any]:
@@ -137,7 +138,7 @@ def estimate_execution_slippage(
     order_krw: float,
     spread_bps: float,
     atr14_pct: float = 1.0,
-    trigger: str = "gemini",
+    trigger: str = "quant_shortterm",
     orderbook_asks: tuple[tuple[float, float], ...] = (),
     orderbook_bids: tuple[tuple[float, float], ...] = (),
 ) -> tuple[float, dict[str, float]]:
@@ -467,11 +468,23 @@ def check_intrabar_triggers(
     return None
 
 
+def _parse_kst_str(kst_str: str | None) -> datetime | None:
+    if not kst_str:
+        return None
+    try:
+        clean = kst_str.replace(" KST", "").strip()
+        return datetime.strptime(clean, "%Y-%m-%d %H:%M:%S").replace(tzinfo=KST)
+    except ValueError:
+        return None
+
+
 def build_portfolio_context(
     state: dict[str, Any],
     spot_price: float,
     *,
     sl_cooldown_active: bool = False,
+    now_kst_str: str | None = None,
+    same_candle_buy_blocked: bool = False,
 ) -> dict[str, Any]:
     eq = portfolio_equity(state, spot_price)
     sol_qty = float(state["sol_qty"])
@@ -480,6 +493,13 @@ def build_portfolio_context(
     avg_entry = float(state["avg_entry_price"])
     unrealized_krw = (spot_price - avg_entry) * sol_qty if sol_qty > 1e-8 and avg_entry > 0 else 0.0
     unrealized_pct = ((spot_price / avg_entry) - 1.0) * 100.0 if sol_qty > 1e-8 and avg_entry > 0 else 0.0
+
+    holding_hours = 0.0
+    if sol_qty > 1e-8 and state.get("entry_time_kst") and now_kst_str:
+        entry_dt = _parse_kst_str(state.get("entry_time_kst"))
+        now_dt = _parse_kst_str(now_kst_str)
+        if entry_dt is not None and now_dt is not None and now_dt > entry_dt:
+            holding_hours = round((now_dt - entry_dt).total_seconds() / 3600.0, 2)
 
     return {
         "total_equity_krw": round(eq, 0),
@@ -491,10 +511,12 @@ def build_portfolio_context(
         "avg_entry_price_krw": round(avg_entry, 1),
         "unrealized_pnl_krw": round(unrealized_krw, 0),
         "unrealized_pnl_pct": round(unrealized_pct, 2),
+        "holding_hours": holding_hours,
         "stop_loss_price_krw": state.get("stop_loss_price"),
         "take_profit_price_krw": state.get("take_profit_price"),
         "daily_circuit_breaker_active": bool(state.get("daily_circuit_breaker_active", False)),
         "sl_cooldown_active": sl_cooldown_active,
+        "same_candle_buy_blocked": same_candle_buy_blocked,
     }
 
 
@@ -505,6 +527,7 @@ def execute_decision(
     *,
     sl_cooldown_active: bool = False,
     atr14_pct: float = 1.0,
+    same_candle_buy_blocked: bool = False,
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Apply hard guardrails and execute paper BUY/SELL/HOLD. Returns (trade_record, guardrail_note)."""
     spot = snapshot.spot_price
@@ -514,6 +537,8 @@ def execute_decision(
             return None, f"일일 최대 손실 한도(-{DAILY_LOSS_LIMIT_PCT:.1f}%) 발동으로 신규 매수 차단"
         if sl_cooldown_active:
             return None, "직전 장중 손절 체결 직후 1시간 재진입 쿨다운 적용"
+        if same_candle_buy_blocked:
+            return None, "크론 지연으로 동일 1시간봉 내 재실행되어 중복 매수 차단"
         if decision.order_pct < MIN_ORDER_PCT:
             return None, f"주문 비중({decision.order_pct:.1f}%)이 최소 임계치({MIN_ORDER_PCT:.0f}%) 미만으로 스킵"
 
@@ -561,11 +586,17 @@ def execute_decision(
             return None, f"최소 주문 금액({int(MIN_ORDER_KRW):,}원) 미만으로 매도 미체결"
         return trade, None
 
-    # HOLD: Optionally tighten stop-loss upwards (trailing protection) if position is profitable
+    # HOLD: Short-term Breakeven + Trailing Stop-Loss Protection
     if float(state["sol_qty"]) > 1e-8 and state.get("stop_loss_price") is not None:
-        proposed_sl = round(spot * (1.0 - decision.stop_loss_pct / 100.0), 1)
-        if proposed_sl > float(state["stop_loss_price"]) and spot > float(state["avg_entry_price"]) * 1.015:
-            state["stop_loss_price"] = proposed_sl
+        avg_entry = float(state["avg_entry_price"])
+        if avg_entry > 0:
+            unrealized_pct = ((spot / avg_entry) - 1.0) * 100.0
+            if unrealized_pct >= BREAKEVEN_TRIGGER_PCT:
+                breakeven_floor = round(avg_entry * 1.003, 1)  # Entry + round-trip cost buffer
+                trailing_sl = round(spot * (1.0 - (decision.stop_loss_pct * 0.7) / 100.0), 1)
+                proposed_sl = max(breakeven_floor, trailing_sl)
+                if proposed_sl > float(state["stop_loss_price"]) and proposed_sl < spot:
+                    state["stop_loss_price"] = proposed_sl
     return None, None
 
 

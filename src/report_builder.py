@@ -159,17 +159,13 @@ def render_markdown_briefing(dashboard_payload: dict[str, Any]) -> str:
     action_label = {"BUY": "매수 (BUY)", "SELL": "매도 (SELL)", "HOLD": "관망 (HOLD)"}.get(
         dec["action"], dec["action"]
     )
-    engine_label = (
-        f"Gemini AI (`{dec['model_name']}`)"
-        if dec["engine"] == "gemini"
-        else f"정량 멀티팩터 폴백 (`{dec['model_name']}`)"
-    )
+    engine_label = f"정량 단타 전략 (`{dec['model_name']}`)"
 
     lines = [
         f"### 최신 정각 브리핑 ({b['time_kst']})",
         "",
         f"- **결정**: `{action_label}` (신뢰도 {dec['confidence']}%) — {dec['headline']}",
-        f"- **판단 엔진**: {engine_label}",
+        f"- **전략 엔진**: {engine_label}",
         f"- **SOL 현재가**: {round(m['spot_price']):,}원 (24h {_format_signed_pct(m['change_24h_pct'])})",
         f"- **총 평가자산**: {round(s['total_equity_krw']):,}원 (누적 {_format_signed_pct(s['total_return_pct'])} / 손익 {round(s['total_pnl_krw']):+,}원)",
         f"- **단순 보유 대비**: B&H {_format_signed_pct(s['benchmark_return_pct'])} / 초과수익 `{s['alpha_pp']:+.2f}%p`",

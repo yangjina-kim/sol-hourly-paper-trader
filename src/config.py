@@ -1,8 +1,7 @@
-"""Configuration constants and risk guardrails for the SOL/KRW paper trader."""
+"""Configuration constants and risk guardrails for the SOL/KRW short-term quant paper trader."""
 
 from __future__ import annotations
 
-import os
 from datetime import timedelta, timezone
 from pathlib import Path
 
@@ -35,16 +34,18 @@ STOP_LOSS_EXTRA_SLIPPAGE_RATE = 0.0012  # +12 bps (0.12%) panic-sweep surcharge 
 TAKE_PROFIT_SLIPPAGE_RATE = 0.0001  # 1 bp (0.01%) minimal slippage on limit-style intrabar TP
 MAX_TOTAL_SLIPPAGE_RATE = 0.0060  # Hard cap at 60 bps (0.60%) per fill
 
-# Hard Risk Guardrails (enforced regardless of AI output)
+# Short-Term Trading Risk Guardrails
 MAX_POSITION_RATIO = 0.70  # Max 70% of total equity in SOL (min 30% KRW buffer)
 MIN_ORDER_KRW = 10_000.0  # Minimum order size (KRW)
 MIN_ORDER_PCT = 5.0  # Ignore tiny orders below 5% to prevent fee churn
-DEFAULT_STOP_LOSS_PCT = 2.5  # -2.5%
+DEFAULT_STOP_LOSS_PCT = 1.8  # Tighter short-term SL (-1.8%)
 MIN_STOP_LOSS_PCT = 1.5
-MAX_STOP_LOSS_PCT = 5.0
-DEFAULT_TAKE_PROFIT_PCT = 4.5  # +4.5%
-MIN_TAKE_PROFIT_PCT = 2.0
-MAX_TAKE_PROFIT_PCT = 10.0
+MAX_STOP_LOSS_PCT = 3.8
+DEFAULT_TAKE_PROFIT_PCT = 3.2  # Realistic 1h intraday TP (+3.2%)
+MIN_TAKE_PROFIT_PCT = 2.2
+MAX_TAKE_PROFIT_PCT = 6.5
+BREAKEVEN_TRIGGER_PCT = 1.2  # Lock breakeven+cost SL once unrealized PnL >= +1.2%
+TIME_STOP_HOURS = 12.0  # Exit stagnant short-term positions after 12h in flat range
 DAILY_LOSS_LIMIT_PCT = 5.0  # Block new BUYs if KST daily drawdown exceeds -5.0%
 
 # Dashboard Payload Caps (full history stays in data/history.json)
@@ -52,10 +53,4 @@ DASHBOARD_SERIES_LIMIT = 720  # 30 days of hourly points
 DASHBOARD_BRIEFINGS_LIMIT = 168  # 7 days of hourly briefings
 DASHBOARD_TRADES_LIMIT = 200
 
-# Gemini API Configuration
-GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
-GEMINI_PRIMARY_MODEL = os.environ.get("GEMINI_MODEL", "").strip() or "gemini-3.8-flash"
-GEMINI_FALLBACK_MODELS: tuple[str, ...] = tuple(
-    dict.fromkeys([GEMINI_PRIMARY_MODEL, "gemini-3.8-flash", "gemini-3.5-flash-lite"])
-)
 HTTP_TIMEOUT_SECONDS = 25

@@ -1,16 +1,11 @@
-name: Hourly SOL/KRW AI Paper Trader
+name: Hourly SOL/KRW Quant Trader
 
 on:
   schedule:
-    # 매시간 정각 5분 뒤 실행 (1시간봉 마감 직후, UTC/KST 동일하게 매시 05분)
-    - cron: "5 * * * *"
+    # 매시 17분 실행 (정각 :00~:05 크론 트래픽 폭주 구간 회피)
+    - cron: "17 * * * *"
   workflow_dispatch:
     inputs:
-      force_quant:
-        description: "Gemini API를 건너뛰고 정량 멀티팩터 전략으로 실행"
-        required: false
-        default: false
-        type: boolean
       dry_run:
         description: "파일 저장 및 배포 없이 시뮬레이션 결과만 미리보기"
         required: false
@@ -28,7 +23,7 @@ concurrency:
 
 jobs:
   trade:
-    name: Run Hourly Trading Cycle
+    name: Run Hourly Quant Trading Cycle
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -42,14 +37,8 @@ jobs:
           python-version: "3.12"
 
       - name: Execute hourly trading cycle
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
         run: |
           ARGS=""
-          if [ "${{ inputs.force_quant }}" = "true" ]; then
-            ARGS="$ARGS --force-quant"
-          fi
           if [ "${{ inputs.dry_run }}" = "true" ]; then
             ARGS="$ARGS --dry-run"
           fi
@@ -66,7 +55,7 @@ jobs:
             exit 0
           fi
           TS_KST=$(TZ=Asia/Seoul date "+%Y-%m-%d %H:%M KST")
-          git commit -m "chore(trade): hourly SOL/KRW briefing (${TS_KST}) [skip ci]"
+          git commit -m "chore(trade): hourly SOL/KRW quant briefing (${TS_KST}) [skip ci]"
           git pull --rebase origin main
           git push origin main
 

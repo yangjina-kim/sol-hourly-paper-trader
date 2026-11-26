@@ -51,8 +51,8 @@
 
   function triggerLabel(trigger) {
     const map = {
-      gemini: "Gemini AI",
-      quant_fallback: "정량 폴백",
+      quant_shortterm: "퀀트 단타 v2",
+      quant_fallback: "퀀트 v1",
       stop_loss: "장중 손절",
       take_profit: "장중 익절",
     };
@@ -60,7 +60,7 @@
   }
 
   function alignLabel(align) {
-    const map = { bullish: "정배열", bearish: "역배열", mixed: "혼조" };
+    const map = { bullish: "강세", bearish: "약세", mixed: "혼조" };
     return map[align] || align;
   }
 
@@ -90,27 +90,19 @@
     chEl.className = `num-display ticker-delta ${signClass(m.change_24h_pct)}`;
 
     const engineEl = $("engine-badge");
-    if (dec.engine === "gemini") {
-      engineEl.textContent = `Gemini (${dec.model_name})`;
-      engineEl.classList.remove("is-fallback");
-    } else {
-      engineEl.textContent = "정량 멀티팩터 폴백";
-      engineEl.classList.add("is-fallback");
-    }
+    engineEl.textContent = dec.model_name === "quant-shortterm-v2" ? "퀀트 단타 v2" : `퀀트 엔진 (${dec.model_name})`;
+    engineEl.classList.remove("is-fallback");
 
     $("last-updated").textContent = shortKst(data.generated_at_kst);
     $("footer-meta").textContent = `데이터 출처: ${(data.meta.exchange_source || "upbit").toUpperCase()} · 생성 ${data.generated_at_kst}`;
 
-    // Status Banner
+    // Status Banner (only show active circuit breaker or guardrail notes)
     const banner = $("status-banner");
     const messages = [];
     if (data.summary.daily_circuit_breaker_active) {
       messages.push(
         `<strong>일일 손실 서킷브레이커 발동 중:</strong> 금일(KST) 낙폭이 -${data.meta.daily_loss_limit_pct}%를 초과해 신규 매수가 자동 차단되었습니다.`
       );
-    }
-    if (dec.fallback_reason) {
-      messages.push(`<strong>엔진 안내:</strong> ${escapeHtml(dec.fallback_reason)}`);
     }
     if (data.latest_briefing.guardrail_note) {
       messages.push(`<strong>가드레일 메모:</strong> ${escapeHtml(data.latest_briefing.guardrail_note)}`);
@@ -174,14 +166,15 @@
     const rsiEl = $("ind-rsi");
     rsiEl.textContent = Number(ind.rsi14).toFixed(1);
     let rsiNote = "중립 구간";
-    if (ind.rsi14 >= 70) rsiNote = "단기 과매수 경계";
-    else if (ind.rsi14 <= 30) rsiNote = "단기 과매도 구간";
+    if (ind.rsi14 >= 70) rsiNote = "단기 과열 경계";
+    else if (ind.rsi14 <= 35) rsiNote = "단기 과매도 구간";
     else if (ind.rsi14 > ind.rsi14_prev) rsiNote = `상승 전환 (직전 ${ind.rsi14_prev})`;
     else rsiNote = `완만 둔화 (직전 ${ind.rsi14_prev})`;
     $("ind-rsi-note").textContent = rsiNote;
 
-    $("ind-trend").textContent = `${alignLabel(ind.ema_alignment)} / 4h ${htfLabel(ind.htf_trend)}`;
-    $("ind-ema21").textContent = `EMA21 ${fmtKrw(ind.ema21)}`;
+    const fastAlign = ind.fast_alignment || ind.ema_alignment;
+    $("ind-trend").textContent = `단기 ${alignLabel(fastAlign)} / 4h ${htfLabel(ind.htf_trend)}`;
+    $("ind-ema21").textContent = ind.ema13 ? `EMA13 ${fmtKrw(ind.ema13)}` : `EMA21 ${fmtKrw(ind.ema21)}`;
 
     const macdEl = $("ind-macd");
     macdEl.textContent = `${ind.macd_hist >= 0 ? "+" : ""}${Number(ind.macd_hist).toFixed(1)}`;
@@ -191,9 +184,10 @@
     $("ind-bb").textContent = `%B ${Number(ind.bb_percent_b).toFixed(2)}`;
     $("ind-atr").textContent = `ATR ${Number(ind.atr14_pct).toFixed(2)}%`;
 
+    const vwapDist = ind.dist_from_vwap12_pct !== undefined ? ind.dist_from_vwap12_pct : ind.dist_from_vwap_pct;
     const vwapEl = $("ind-vwap");
-    vwapEl.textContent = fmtPct(ind.dist_from_vwap_pct);
-    vwapEl.className = `num-display ind-val ${signClass(ind.dist_from_vwap_pct)}`;
+    vwapEl.textContent = fmtPct(vwapDist);
+    vwapEl.className = `num-display ind-val ${signClass(vwapDist)}`;
     $("ind-vol").textContent = `거래량 ${Number(ind.volume_ratio_24h).toFixed(2)}x`;
 
     const qEl = $("ind-qscore");
@@ -269,7 +263,7 @@
 
     if (state.chartMode === "equity") {
       legendEl.innerHTML = `
-        <span class="legend-item"><span class="legend-swatch" style="background:${colorStrategy}"></span>AI 단타 전략 평가자산</span>
+        <span class="legend-item"><span class="legend-swatch" style="background:${colorStrategy}"></span>퀀트 단타 전략 평가자산</span>
         <span class="legend-item"><span class="legend-swatch dashed"></span>SOL 단순 보유 (Buy &amp; Hold)</span>
         <span class="legend-item"><span class="legend-dot" style="background:${colorPos}"></span>매수 체결</span>
         <span class="legend-item"><span class="legend-dot" style="background:${colorNeg}"></span>매도 체결</span>

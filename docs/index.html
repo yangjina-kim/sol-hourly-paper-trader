@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SOL/KRW 시간별 AI 단타 브리핑 — 모의투자 시뮬레이터</title>
+  <title>SOL/KRW 시간별 퀀트 단타 브리핑 — 모의투자 시뮬레이터</title>
   <meta
     name="description"
-    content="GitHub Actions로 매 1시간마다 업비트 KRW-SOL 시장을 분석해 모의 단타 매매 결정을 내리고 누적 성과와 한국어 브리핑을 기록하는 라이브 대시보드입니다."
+    content="GitHub Actions로 매 1시간마다 업비트 KRW-SOL 시장을 정량 분석해 모의 단타 매매 결정을 내리고 누적 성과와 한국어 브리핑을 기록하는 라이브 대시보드입니다."
   />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -26,8 +26,8 @@
     <!-- Modern Fintech Masthead -->
     <header class="masthead" id="masthead">
       <div class="masthead-left">
-        <p class="masthead-kicker">UPBIT KRW-SOL · HOURLY AI PAPER TRADING DESK</p>
-        <h1 class="masthead-title">SOL/KRW 시간별 AI 단타 브리핑</h1>
+        <p class="masthead-kicker">UPBIT KRW-SOL · HOURLY QUANT PAPER TRADING DESK</p>
+        <h1 class="masthead-title">SOL/KRW 시간별 퀀트 단타 브리핑</h1>
       </div>
 
       <div class="masthead-right">
@@ -39,7 +39,7 @@
           </div>
           <div class="ticker-divider" aria-hidden="true"></div>
           <div class="ticker-item">
-            <span class="ticker-label">판단 엔진</span>
+            <span class="ticker-label">전략 엔진</span>
             <span class="engine-tag" id="engine-badge">로딩 중</span>
           </div>
           <div class="ticker-divider" aria-hidden="true"></div>
@@ -325,25 +325,25 @@
             </ul>
           </div>
           <div class="rule-block">
-            <h3>강제 리스크 가드레일</h3>
+            <h3>단타 전략 및 강제 리스크 가드레일</h3>
             <ul class="rule-list">
+              <li>단타 메인 엔진 (<code>quant-shortterm-v2</code>): 1h <code>EMA5/13</code> 초단기 추세 · Fast <code>MACD(8,17,6)</code> · <code>12h VWAP</code>/돌파 · <code>RSI(14)</code> 반등 · 거래량/호가 수급 6개 팩터 합산 (<code>+24</code> 이상 매수 / <code>-22</code> 이하 매도)</li>
               <li>최대 단일 종목 비중: 총 평가자산의 <strong class="num-display">70%</strong> 상한 (항상 최소 30% 원화 완충)</li>
-              <li>장중 손절/익절 감시: 매시간 실행 시 직전 1시간봉의 고가·저가를 검사해 손절(<strong class="num-display">-1.5% ~ -5.0%</strong>) 또는 익절(<strong class="num-display">+2.0% ~ +10.0%</strong>) 도달 시 자동 체결</li>
-              <li>손절 직후 쿨다운: 장중 손절 체결 시 동일 회차 즉시 재진입(뇌동매매) 차단</li>
-              <li>일일 서킷브레이커: 당일(KST 00시 기준) 누적 평가손실이 <strong class="num-display">-5.0%</strong>를 초과하면 당일 신규 매수 전면 차단</li>
-              <li>엔진 이중화: <code>GEMINI_API_KEY</code> 설정 시 Gemini AI가 판단하며, 미설정 또는 API 오류 시 정량 멀티팩터 전략으로 자동 폴백</li>
+              <li>타이트한 장중 손절/익절 &amp; 본절 트레일링: ATR 연동 손절(<strong class="num-display">-1.5% ~ -3.8%</strong>) / 익절(<strong class="num-display">+2.2% ~ +6.5%</strong>) + 평가수익 <strong class="num-display">+1.2%</strong> 도달 시 손절가를 본절+비용 이상으로 자동 상향</li>
+              <li>단타 시간 손절(Time-Stop): 진입 후 <strong class="num-display">12시간</strong> 이상 횡보 정체(<code>-0.8% ~ +0.8%</code>) 시 전량 정리하여 기회비용·급락 리스크 차단</li>
+              <li>중복 진입·서킷브레이커: 크론 지연으로 동일 1시간봉 재실행 시 중복 매수 차단, 손절 직후 1회차 쿨다운, 당일(KST) 낙폭 <strong class="num-display">-5.0%</strong> 초과 시 신규 매수 전면 차단</li>
             </ul>
           </div>
         </div>
         <p class="disclaimer-box">
           <strong>모의투자 안내:</strong> 본 대시보드는 교육·전략 검증 목적의 가상 자금 시뮬레이션이며 실제 금전 거래를 수행하지 않습니다.
-          AI 및 정량 지표 기반 단기 매매는 높은 변동성과 수수료 부담을 수반하며 과거 또는 모의 성과가 미래 수익을 보장하지 않습니다.
+          정량 지표 기반 단기 매매는 높은 변동성과 수수료·슬리피지 부담을 수반하며 과거 또는 모의 성과가 미래 수익을 보장하지 않습니다.
         </p>
       </div>
     </section>
 
     <footer class="page-footer">
-      <span>SOL/KRW Hourly AI Paper Trader · GitHub Actions + GitHub Pages</span>
+      <span>SOL/KRW Hourly Quant Paper Trader · GitHub Actions + GitHub Pages</span>
       <span class="mono" id="footer-meta">Upbit Public Quotation API</span>
     </footer>
   </div>
