@@ -21,5 +21,28 @@
     "realized_pnl_krw": null,
     "realized_pnl_pct": null,
     "reason": "상승 모멘텀 우위 — 가용 현금 35% 분할 진입"
+  },
+  {
+    "id": "T0002",
+    "time_kst": "2026-11-26 18:19:59 KST",
+    "time_utc": "2026-11-26T09:19:59Z",
+    "side": "BUY",
+    "trigger": "quant_shortterm",
+    "engine": "quant-shortterm-v2",
+    "spot_price": 96350.0,
+    "exec_price": 96451.59,
+    "slippage_bps": 10.54,
+    "slippage_krw": 2395.0,
+    "slippage_breakdown": {
+      "book_bps": 9.82,
+      "vol_bps": 0.72,
+      "event_bps": 0.0
+    },
+    "sol_qty": 23.575168,
+    "krw_amount": 2275000.0,
+    "fee_krw": 1138.0,
+    "realized_pnl_krw": null,
+    "realized_pnl_pct": null,
+    "reason": "단기 추세 전환(점수 +41.3) — 가용 현금 35% 분할 매수"
   }
 ]
