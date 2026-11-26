@@ -1,1 +1,25 @@
-[]
+[
+  {
+    "id": "T0001",
+    "time_kst": "2026-11-26 16:16:03 KST",
+    "time_utc": "2026-11-26T07:16:03Z",
+    "side": "BUY",
+    "trigger": "quant_fallback",
+    "engine": "quant-multifactor-v1",
+    "spot_price": 96200.0,
+    "exec_price": 96283.5,
+    "slippage_bps": 8.68,
+    "slippage_krw": 3034.0,
+    "slippage_breakdown": {
+      "book_bps": 7.8,
+      "vol_bps": 0.88,
+      "event_bps": 0.0
+    },
+    "sol_qty": 36.332808,
+    "krw_amount": 3500000.0,
+    "fee_krw": 1750.0,
+    "realized_pnl_krw": null,
+    "realized_pnl_pct": null,
+    "reason": "상승 모멘텀 우위 — 가용 현금 35% 분할 진입"
+  }
+]
