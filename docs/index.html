@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SOL/KRW 시간별 퀀트 단타 브리핑 — 모의투자 시뮬레이터</title>
+  <title>SOL/KRW 시간별 퀀트 단타 브리핑 — 모의투자 대시보드</title>
   <meta
     name="description"
     content="GitHub Actions로 매 1시간마다 업비트 KRW-SOL 시장을 정량 분석해 모의 단타 매매 결정을 내리고 누적 성과와 한국어 브리핑을 기록하는 라이브 대시보드입니다."
@@ -23,24 +23,45 @@
 </head>
 <body>
   <div class="page-shell">
-    <!-- Modern Fintech Masthead -->
+    <!-- Top Masthead -->
     <header class="masthead" id="masthead">
-      <div class="masthead-left">
-        <p class="masthead-kicker">UPBIT KRW-SOL · HOURLY QUANT PAPER TRADING DESK</p>
-        <h1 class="masthead-title">SOL/KRW 시간별 퀀트 단타 브리핑</h1>
+      <div class="brand-group">
+        <div class="brand-mark" aria-hidden="true">
+          <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
+            <rect width="26" height="26" rx="8" fill="url(#brandGrad)" />
+            <path d="M7.5 9.2H18.5L16.7 11.4H5.7L7.5 9.2Z" fill="#fff" />
+            <path d="M7.5 14.6H18.5L16.7 16.8H5.7L7.5 14.6Z" fill="#fff" fill-opacity="0.88" />
+            <path d="M18.5 11.9H7.5L9.3 14.1H20.3L18.5 11.9Z" fill="#6EE7B7" />
+            <defs>
+              <linearGradient id="brandGrad" x1="0" y1="0" x2="26" y2="26" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#1E3A8A" />
+                <stop offset="1" stop-color="#0F172A" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div>
+          <div class="masthead-kicker-row">
+            <span class="masthead-kicker">UPBIT KRW-SOL · PAPER TRADING</span>
+            <span class="engine-tag" id="engine-badge">로딩 중</span>
+          </div>
+          <h1 class="masthead-title">SOL/KRW 시간별 퀀트 단타 브리핑</h1>
+        </div>
       </div>
 
       <div class="masthead-right">
         <div class="ticker-strip" id="live-ticker">
           <div class="ticker-item">
             <span class="ticker-label">SOL 현재가</span>
-            <strong class="num-display ticker-price" id="spot-price">-</strong>
-            <span class="num-display ticker-delta" id="spot-change-24h">-</span>
+            <div class="ticker-price-row">
+              <strong class="num-display ticker-price" id="spot-price">-</strong>
+              <span class="num-display ticker-delta-pill" id="spot-change-24h">-</span>
+            </div>
           </div>
           <div class="ticker-divider" aria-hidden="true"></div>
           <div class="ticker-item">
-            <span class="ticker-label">전략 엔진</span>
-            <span class="engine-tag" id="engine-badge">로딩 중</span>
+            <span class="ticker-label">24H 고가 / 저가</span>
+            <span class="num-display ticker-range" id="spot-hl-24h">-</span>
           </div>
           <div class="ticker-divider" aria-hidden="true"></div>
           <div class="ticker-item">
@@ -54,77 +75,102 @@
             <button type="button" class="seg-btn active" id="palette-kr-btn" data-palette-choice="kr">한국식 (적/청)</button>
             <button type="button" class="seg-btn" id="palette-global-btn" data-palette-choice="global">글로벌 (녹/적)</button>
           </div>
-          <button type="button" class="btn-outline" id="refresh-btn" title="최신 데이터 다시 불러오기">새로고침</button>
+          <button type="button" class="btn-refresh" id="refresh-btn" title="최신 데이터 다시 불러오기">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M13.5 8A5.5 5.5 0 1 1 11.9 4.1M13.5 2.5V5.5H10.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <span id="refresh-label">새로고침</span>
+          </button>
         </div>
       </div>
     </header>
 
-    <!-- Status Notice Banner (Fallback or Circuit Breaker or Empty State) -->
+    <!-- Status Notice Banner (Circuit Breaker or Guardrail Note only) -->
     <aside class="notice-banner hidden" id="status-banner" role="status"></aside>
 
-    <!-- Hero KPI Ledger Strip -->
+    <!-- Hero KPI Strip -->
     <section class="kpi-strip" aria-label="핵심 성과 요약">
+      <!-- Card 1: Obsidian Total Equity -->
       <article class="kpi-cell kpi-cell--hero">
         <div class="kpi-head">
           <span class="kpi-label">총 평가자산</span>
           <span class="num-display kpi-sub-badge" id="kpi-run-count">0회 누적</span>
         </div>
-        <div class="num-display kpi-value" id="kpi-equity">-</div>
+        <div class="kpi-hero-body">
+          <div class="num-display kpi-value" id="kpi-equity">-</div>
+          <span class="num-display kpi-return-pill" id="kpi-return">-</span>
+        </div>
         <div class="kpi-meta">
-          <span class="num-display kpi-delta" id="kpi-return">-</span>
           <span class="num-display kpi-secondary" id="kpi-pnl">초기 1,000만 원</span>
+          <span class="num-display kpi-secondary" id="kpi-daily-ret">금일 -</span>
         </div>
       </article>
 
+      <!-- Card 2: Benchmark Alpha -->
       <article class="kpi-cell">
         <div class="kpi-head">
           <span class="kpi-label">단순 보유(B&amp;H) 대비</span>
           <span class="kpi-sub-label">초과수익 Alpha</span>
         </div>
         <div class="num-display kpi-value" id="kpi-alpha">-</div>
-        <div class="kpi-meta">
-          <span class="num-display kpi-secondary" id="kpi-bm-return">B&amp;H -</span>
-          <span class="num-display kpi-secondary" id="kpi-bm-equity">-</span>
+        <div class="compare-bars" aria-label="전략 vs 단순보유 수익률 비교">
+          <div class="compare-row">
+            <span class="compare-name">전략</span>
+            <div class="compare-track"><div class="compare-fill strategy" id="cmp-bar-strat" style="width: 50%"></div></div>
+            <span class="num-display compare-val" id="cmp-val-strat">-</span>
+          </div>
+          <div class="compare-row">
+            <span class="compare-name">B&amp;H</span>
+            <div class="compare-track"><div class="compare-fill benchmark" id="cmp-bar-bm" style="width: 50%"></div></div>
+            <span class="num-display compare-val" id="cmp-val-bm">-</span>
+          </div>
         </div>
       </article>
 
+      <!-- Card 3: Active Position & SL-Entry-TP Gauge -->
       <article class="kpi-cell">
         <div class="kpi-head">
           <span class="kpi-label">현재 SOL 포지션</span>
           <span class="num-display kpi-sub-badge" id="kpi-exposure-pct">비중 0.0%</span>
         </div>
-        <div class="num-display kpi-value" id="kpi-sol-value">-</div>
+        <div class="kpi-pos-top">
+          <div class="num-display kpi-value" id="kpi-sol-value">-</div>
+          <span class="num-display kpi-pos-qty" id="kpi-sol-qty">0.0000 SOL</span>
+        </div>
         <div class="exposure-track" aria-hidden="true">
           <div class="exposure-fill" id="kpi-exposure-bar" style="width: 0%"></div>
           <div class="exposure-cap-mark" style="left: 70%" title="최대 허용 비중 70%"></div>
         </div>
         <div class="kpi-meta">
-          <span class="num-display kpi-secondary" id="kpi-sol-qty">0.0000 SOL</span>
-          <span class="num-display kpi-secondary" id="kpi-unrealized">미실현 -</span>
+          <span class="num-display kpi-secondary" id="kpi-unrealized">전액 원화 관망 중</span>
+          <span class="num-display kpi-secondary" id="kpi-cash-mini">현금 -</span>
         </div>
       </article>
 
+      <!-- Card 4: Risk & Execution Cost Scorecard -->
       <article class="kpi-cell">
         <div class="kpi-head">
-          <span class="kpi-label">리스크 &amp; 체결 지표</span>
+          <span class="kpi-label">리스크 &amp; 체결 비용</span>
           <span class="num-display kpi-sub-badge" id="kpi-trade-count">0건 체결</span>
         </div>
         <div class="kpi-mini-grid">
-          <div>
+          <div class="mini-stat">
             <span class="mini-label">최대낙폭 (MDD)</span>
             <strong class="num-display mini-val" id="kpi-mdd">0.00%</strong>
           </div>
-          <div>
-            <span class="mini-label">승률</span>
+          <div class="mini-stat">
+            <span class="mini-label">승률 (청산)</span>
             <strong class="num-display mini-val" id="kpi-winrate">-</strong>
           </div>
-          <div>
-            <span class="mini-label">수수료+슬리피지</span>
+          <div class="mini-stat">
+            <span class="mini-label">수수료 + 슬리피지</span>
             <strong class="num-display mini-val" id="kpi-fees">0원</strong>
+            <span class="num-display mini-sub" id="kpi-cost-split">-</span>
           </div>
-          <div>
-            <span class="mini-label">샤프 비율</span>
-            <strong class="num-display mini-val" id="kpi-sharpe">-</strong>
+          <div class="mini-stat">
+            <span class="mini-label">실현 손익</span>
+            <strong class="num-display mini-val" id="kpi-realized">0원</strong>
+            <span class="num-display mini-sub" id="kpi-sharpe">샤프 -</span>
           </div>
         </div>
       </article>
@@ -132,15 +178,18 @@
 
     <!-- Main Analytical Workspace -->
     <main class="workspace-grid">
-      <!-- Left: Interactive Chart Module -->
+      <!-- Left: 1:1 Pixel-Accurate Responsive SVG Chart + Indicators -->
       <section class="panel chart-panel" aria-label="성과 및 시세 차트">
-        <div class="panel-header">
+        <div class="panel-header chart-panel-header">
           <div class="tab-group" role="tablist" aria-label="차트 종류">
             <button type="button" role="tab" aria-selected="true" class="tab-btn active" id="chart-tab-equity" data-chart-mode="equity">
-              자산 곡선 vs 단순보유
+              자산 곡선
             </button>
             <button type="button" role="tab" aria-selected="false" class="tab-btn" id="chart-tab-price" data-chart-mode="price">
-              SOL/KRW 1시간봉 &amp; 타점
+              SOL 시세 &amp; 타점
+            </button>
+            <button type="button" role="tab" aria-selected="false" class="tab-btn" id="chart-tab-signal" data-chart-mode="signal">
+              퀀트 점수 &amp; RSI
             </button>
           </div>
           <div class="range-group" id="range-selector" role="group" aria-label="조회 기간">
@@ -153,48 +202,78 @@
 
         <div class="chart-legend" id="chart-legend"></div>
 
+        <!-- 1:1 Aspect-Ratio Safe Chart Stage (ResizeObserver dynamically sets viewBox) -->
         <div class="chart-stage" id="chart-stage">
-          <svg id="main-chart-svg" class="chart-svg" viewBox="0 0 780 340" preserveAspectRatio="none" aria-label="데이터 차트"></svg>
+          <svg id="main-chart-svg" class="chart-svg" aria-label="데이터 차트"></svg>
           <div class="chart-tooltip hidden" id="chart-tooltip"></div>
         </div>
 
-        <!-- Compact Technical Indicators Bar -->
+        <!-- Technical Indicators Strip with Micro Gauges -->
         <div class="indicator-bar" id="indicator-bar" aria-label="주요 기술적 지표">
           <div class="ind-cell">
-            <span class="ind-label">RSI (14)</span>
-            <strong class="num-display ind-val" id="ind-rsi">-</strong>
+            <div class="ind-top">
+              <span class="ind-label">단기 퀀트 점수</span>
+              <strong class="num-display ind-val" id="ind-qscore">-</strong>
+            </div>
+            <div class="bi-gauge" aria-hidden="true">
+              <div class="bi-center"></div>
+              <div class="bi-fill" id="gauge-qscore"></div>
+            </div>
+            <span class="num-display ind-sub" id="ind-ob">호가 -</span>
+          </div>
+
+          <div class="ind-cell">
+            <div class="ind-top">
+              <span class="ind-label">RSI (14)</span>
+              <strong class="num-display ind-val" id="ind-rsi">-</strong>
+            </div>
+            <div class="uni-gauge" aria-hidden="true">
+              <div class="uni-zone" style="left: 35%; width: 35%"></div>
+              <div class="uni-pin" id="gauge-rsi" style="left: 50%"></div>
+            </div>
             <span class="ind-sub" id="ind-rsi-note">-</span>
           </div>
+
           <div class="ind-cell">
-            <span class="ind-label">추세 (1h / 4h)</span>
-            <strong class="ind-val" id="ind-trend">-</strong>
-            <span class="num-display ind-sub" id="ind-ema21">EMA21 -</span>
+            <div class="ind-top">
+              <span class="ind-label">초단기 추세</span>
+              <strong class="ind-val" id="ind-trend">-</strong>
+            </div>
+            <span class="num-display ind-sub" id="ind-ema13">EMA13 -</span>
+            <span class="num-display ind-sub" id="ind-ema5">EMA5 -</span>
           </div>
+
           <div class="ind-cell">
-            <span class="ind-label">MACD 히스토그램</span>
-            <strong class="num-display ind-val" id="ind-macd">-</strong>
+            <div class="ind-top">
+              <span class="ind-label">Fast MACD</span>
+              <strong class="num-display ind-val" id="ind-macd">-</strong>
+            </div>
             <span class="ind-sub" id="ind-macd-note">-</span>
+            <span class="num-display ind-sub" id="ind-macd-line">-</span>
           </div>
+
           <div class="ind-cell">
-            <span class="ind-label">볼린저 %B / ATR</span>
-            <strong class="num-display ind-val" id="ind-bb">-</strong>
+            <div class="ind-top">
+              <span class="ind-label">12h VWAP 괴리</span>
+              <strong class="num-display ind-val" id="ind-vwap">-</strong>
+            </div>
+            <span class="num-display ind-sub" id="ind-vwap-price">-</span>
+            <span class="num-display ind-sub" id="ind-vol">거래량 -</span>
+          </div>
+
+          <div class="ind-cell">
+            <div class="ind-top">
+              <span class="ind-label">볼린저 %B / ATR</span>
+              <strong class="num-display ind-val" id="ind-bb">-</strong>
+            </div>
             <span class="num-display ind-sub" id="ind-atr">ATR -</span>
-          </div>
-          <div class="ind-cell">
-            <span class="ind-label">VWAP 괴리 / 거래량</span>
-            <strong class="num-display ind-val" id="ind-vwap">-</strong>
-            <span class="num-display ind-sub" id="ind-vol">Vol -</span>
-          </div>
-          <div class="ind-cell">
-            <span class="ind-label">정량 점수 / 호가</span>
-            <strong class="num-display ind-val" id="ind-qscore">-</strong>
-            <span class="num-display ind-sub" id="ind-ob">OB -</span>
+            <span class="num-display ind-sub" id="ind-spread">스프레드 -</span>
           </div>
         </div>
       </section>
 
-      <!-- Right: Latest Hourly AI Briefing -->
-      <section class="panel briefing-panel" aria-label="최신 정각 AI 브리핑">
+      <!-- Right: Latest Hourly Quant Briefing -->
+      <section class="panel briefing-panel" aria-label="최신 정각 퀀트 브리핑">
         <div class="panel-header">
           <div>
             <h2 class="panel-title">최신 정각 브리핑</h2>
@@ -210,7 +289,7 @@
           </div>
           <div class="confidence-block">
             <div class="confidence-row">
-              <span class="confidence-label">신뢰도</span>
+              <span class="confidence-label">신호 신뢰도</span>
               <strong class="num-display" id="decision-confidence">-</strong>
             </div>
             <div class="confidence-track">
@@ -223,38 +302,55 @@
         <p class="briefing-body" id="briefing-summary"></p>
 
         <div class="briefing-section">
-          <h4 class="briefing-subhead">핵심 판단 근거</h4>
+          <h4 class="briefing-subhead">핵심 정량 근거</h4>
           <ul class="factor-list" id="briefing-factors"></ul>
         </div>
 
         <div class="briefing-section briefing-notes-grid">
-          <div>
+          <div class="note-card">
             <h4 class="briefing-subhead">리스크 체크포인트</h4>
             <p class="briefing-note" id="briefing-risk">-</p>
           </div>
-          <div>
+          <div class="note-card">
             <h4 class="briefing-subhead">다음 1시간 관전 포인트</h4>
             <p class="briefing-note" id="briefing-next">-</p>
           </div>
         </div>
 
-        <!-- Active Position Guardrail Readout -->
-        <div class="position-guardrails" id="position-guardrails">
-          <div>
-            <span class="mini-label">평균 매수가</span>
-            <strong class="num-display" id="pos-avg-entry">-</strong>
+        <!-- Active Position SL / Entry / TP Visual Bracket -->
+        <div class="bracket-box" id="bracket-box">
+          <div class="bracket-header">
+            <span class="briefing-subhead" style="margin:0">보유 포지션 손절·익절 구간</span>
+            <span class="num-display bracket-status" id="bracket-status">-</span>
           </div>
-          <div>
-            <span class="mini-label">자동 손절가 (SL)</span>
-            <strong class="num-display" id="pos-sl">-</strong>
+          <div class="bracket-bar-wrap hidden" id="bracket-bar-wrap">
+            <div class="bracket-track">
+              <div class="bracket-entry-mark" id="bracket-entry-mark" title="평균 매수가"></div>
+              <div class="bracket-spot-dot" id="bracket-spot-dot" title="현재가"></div>
+            </div>
+            <div class="bracket-labels num-display">
+              <span class="is-neg" id="bracket-sl-lbl">SL -</span>
+              <span id="bracket-entry-lbl">평단 -</span>
+              <span class="is-pos" id="bracket-tp-lbl">TP -</span>
+            </div>
           </div>
-          <div>
-            <span class="mini-label">자동 익절가 (TP)</span>
-            <strong class="num-display" id="pos-tp">-</strong>
-          </div>
-          <div>
-            <span class="mini-label">보유 현금 (KRW)</span>
-            <strong class="num-display" id="pos-cash">-</strong>
+          <div class="position-guardrails" id="position-guardrails">
+            <div>
+              <span class="mini-label">평균 매수가</span>
+              <strong class="num-display" id="pos-avg-entry">-</strong>
+            </div>
+            <div>
+              <span class="mini-label">자동 손절가 (SL)</span>
+              <strong class="num-display is-neg" id="pos-sl">-</strong>
+            </div>
+            <div>
+              <span class="mini-label">자동 익절가 (TP)</span>
+              <strong class="num-display is-pos" id="pos-tp">-</strong>
+            </div>
+            <div>
+              <span class="mini-label">보유 현금 (KRW)</span>
+              <strong class="num-display" id="pos-cash">-</strong>
+            </div>
           </div>
         </div>
       </section>
@@ -268,10 +364,10 @@
             시간별 브리핑 아카이브
           </button>
           <button type="button" role="tab" aria-selected="false" class="tab-btn" id="ledger-tab-trades" data-ledger-tab="trades">
-            체결 내역 원장
+            체결 내역 원장 <span class="tab-count num-display" id="tab-trades-count">0</span>
           </button>
           <button type="button" role="tab" aria-selected="false" class="tab-btn" id="ledger-tab-rules" data-ledger-tab="rules">
-            운용 규칙 &amp; 안전장치
+            전략 구조 &amp; 가드레일
           </button>
         </div>
 
@@ -303,7 +399,7 @@
                 <th class="num">수수료</th>
                 <th class="num">슬리피지</th>
                 <th class="num">실현손익</th>
-                <th>사유</th>
+                <th>판단 사유</th>
               </tr>
             </thead>
             <tbody id="trades-tbody"></tbody>
@@ -311,33 +407,59 @@
         </div>
       </div>
 
-      <!-- Tab 3: Strategy Rules & Risk Guardrails -->
+      <!-- Tab 3: Strategy Architecture & Guardrails -->
       <div class="tab-panel hidden" id="panel-rules">
         <div class="rules-grid">
           <div class="rule-block">
-            <h3>시뮬레이션 체결 환경</h3>
-            <ul class="rule-list" id="rules-execution">
-              <li>시장 및 시세: 업비트 공개 API <code>KRW-SOL</code> 1시간봉·4시간봉·실시간 15호가 (장애 시 빗썸 자동 폴백)</li>
-              <li>초기 가상 시드머니: <strong class="num-display">10,000,000원</strong> (현물 전용, 레버리지·공매도 불가)</li>
-              <li>거래 수수료: 체결 금액의 <strong class="num-display">0.05%</strong> (업비트 원화 마켓 기준)</li>
-              <li>슬리피지 반영 (3단계 모델): ① 업비트 실시간 15호가 잔량 소화 VWAP (하한 <strong class="num-display">0.05% / 5 bps</strong> 또는 반스프레드) + ② 1h ATR(14) 0.8% 초과 시 변동성 지연 가산(최대 <strong class="num-display">+15 bps</strong>) + ③ 주문 유형별 보정(장중 손절 <strong class="num-display">+12 bps</strong> 급락 가산, 장중 익절은 지정가 성격으로 <strong class="num-display">1 bp</strong>)</li>
-              <li>벤치마크: 최초 실행 시점에 1,000만 원을 SOL에 일괄 매수해 보유한 <strong>Buy &amp; Hold</strong>와 매시간 비교</li>
-            </ul>
+            <h3>단타 6팩터 스코어링 구조 (<code>quant-shortterm-v2</code>)</h3>
+            <div class="weight-bars">
+              <div class="weight-row">
+                <span>1h EMA5 / EMA13 초단기 추세 · 기울기</span>
+                <div class="weight-track"><div class="weight-fill" style="width: 100%"></div></div>
+                <strong class="num-display">±28점</strong>
+              </div>
+              <div class="weight-row">
+                <span>Fast MACD(8,17,6) 모멘텀 전환</span>
+                <div class="weight-track"><div class="weight-fill" style="width: 79%"></div></div>
+                <strong class="num-display">±22점</strong>
+              </div>
+              <div class="weight-row">
+                <span>12h VWAP 괴리 · 12h 돈치안 돌파</span>
+                <div class="weight-track"><div class="weight-fill" style="width: 64%"></div></div>
+                <strong class="num-display">±18점</strong>
+              </div>
+              <div class="weight-row">
+                <span>RSI(14) 과매도 반등 · 과열 청산</span>
+                <div class="weight-track"><div class="weight-fill" style="width: 57%"></div></div>
+                <strong class="num-display">±16점</strong>
+              </div>
+              <div class="weight-row">
+                <span>4h 상위 추세 경량 필터</span>
+                <div class="weight-track"><div class="weight-fill" style="width: 29%"></div></div>
+                <strong class="num-display">±8점</strong>
+              </div>
+              <div class="weight-row">
+                <span>거래량 급증 · 상위 5호가 수급</span>
+                <div class="weight-track"><div class="weight-fill" style="width: 29%"></div></div>
+                <strong class="num-display">±8점</strong>
+              </div>
+            </div>
           </div>
+
           <div class="rule-block">
-            <h3>단타 전략 및 강제 리스크 가드레일</h3>
+            <h3>체결 현실화 &amp; 강제 리스크 가드레일</h3>
             <ul class="rule-list">
-              <li>단타 메인 엔진 (<code>quant-shortterm-v2</code>): 1h <code>EMA5/13</code> 초단기 추세 · Fast <code>MACD(8,17,6)</code> · <code>12h VWAP</code>/돌파 · <code>RSI(14)</code> 반등 · 거래량/호가 수급 6개 팩터 합산 (<code>+24</code> 이상 매수 / <code>-22</code> 이하 매도)</li>
-              <li>최대 단일 종목 비중: 총 평가자산의 <strong class="num-display">70%</strong> 상한 (항상 최소 30% 원화 완충)</li>
-              <li>타이트한 장중 손절/익절 &amp; 본절 트레일링: ATR 연동 손절(<strong class="num-display">-1.5% ~ -3.8%</strong>) / 익절(<strong class="num-display">+2.2% ~ +6.5%</strong>) + 평가수익 <strong class="num-display">+1.2%</strong> 도달 시 손절가를 본절+비용 이상으로 자동 상향</li>
-              <li>단타 시간 손절(Time-Stop): 진입 후 <strong class="num-display">12시간</strong> 이상 횡보 정체(<code>-0.8% ~ +0.8%</code>) 시 전량 정리하여 기회비용·급락 리스크 차단</li>
-              <li>중복 진입·서킷브레이커: 크론 지연으로 동일 1시간봉 재실행 시 중복 매수 차단, 손절 직후 1회차 쿨다운, 당일(KST) 낙폭 <strong class="num-display">-5.0%</strong> 초과 시 신규 매수 전면 차단</li>
+              <li>시장 및 시세: 업비트 공개 API <code>KRW-SOL</code> 1시간봉·4시간봉·실시간 15호가 (장애 시 빗썸 자동 폴백)</li>
+              <li>수수료 + 3단계 슬리피지: 수수료 <strong class="num-display">0.05%</strong> + 실시간 15호가 잔량 VWAP(하한 <strong class="num-display">5 bps</strong>) + ATR 변동성 가산(최대 <strong class="num-display">+15 bps</strong>) + 손절 급락 가산(<strong class="num-display">+12 bps</strong>) / 익절 지정가(<strong class="num-display">1 bp</strong>)</li>
+              <li>진입·청산 기준: 매수 <strong class="num-display">+24점</strong> 이상(또는 RSI≤35 반등) / 매도 <strong class="num-display">-22점</strong> 이하, 최대 SOL 비중 <strong class="num-display">70%</strong> 상한</li>
+              <li>손절·익절 &amp; 본절 트레일링: ATR 연동 손절(<strong class="num-display">-1.5% ~ -3.8%</strong>) / 익절(<strong class="num-display">+2.2% ~ +6.5%</strong>), 평가수익 <strong class="num-display">+1.2%</strong> 도달 시 본절+비용 이상으로 손절가 자동 상향</li>
+              <li>시간 손절 &amp; 크론 보호: <strong class="num-display">12시간</strong> 횡보 정체 시 시간 손절, 동일 1시간봉 중복 매수 차단, 당일(KST) 낙폭 <strong class="num-display">-5.0%</strong> 초과 시 서킷브레이커 발동</li>
             </ul>
           </div>
         </div>
         <p class="disclaimer-box">
-          <strong>모의투자 안내:</strong> 본 대시보드는 교육·전략 검증 목적의 가상 자금 시뮬레이션이며 실제 금전 거래를 수행하지 않습니다.
-          정량 지표 기반 단기 매매는 높은 변동성과 수수료·슬리피지 부담을 수반하며 과거 또는 모의 성과가 미래 수익을 보장하지 않습니다.
+          <strong>모의투자 안내:</strong> 본 대시보드는 교육·전략 검증 목적의 가상 자금(초기 1,000만 원) 시뮬레이션이며 실제 금전 거래를 수행하지 않습니다.
+          정량 지표 기반 단기 매매는 높은 변동성과 수수료·슬리피지 부담을 수반하며 모의 성과가 미래 수익을 보장하지 않습니다.
         </p>
       </div>
     </section>
