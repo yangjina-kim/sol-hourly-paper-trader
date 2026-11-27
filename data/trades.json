@@ -205,5 +205,28 @@
     "realized_pnl_krw": null,
     "realized_pnl_pct": null,
     "reason": "단기 상승 돌파(점수 +46.9) — 가용 현금 50% 진입"
+  },
+  {
+    "id": "T0010",
+    "time_kst": "2026-11-27 13:17:51 KST",
+    "time_utc": "2026-11-27T04:17:51Z",
+    "side": "SELL",
+    "trigger": "quant_shortterm",
+    "engine": "quant-shortterm-v2",
+    "spot_price": 98600.0,
+    "exec_price": 98547.94,
+    "slippage_bps": 5.28,
+    "slippage_krw": 1863.0,
+    "slippage_breakdown": {
+      "book_bps": 5.0,
+      "vol_bps": 0.28,
+      "event_bps": 0.0
+    },
+    "sol_qty": 35.778882,
+    "krw_amount": 3525935.0,
+    "fee_krw": 1763.0,
+    "realized_pnl_krw": 67393.0,
+    "realized_pnl_pct": 1.95,
+    "reason": "단기 과열(RSI 70.5 · 수익 +2.0%) — 50% 분할 익절"
   }
 ]
