@@ -8,10 +8,13 @@
     accounts: {},
     assetOrder: [],
     selectedAsset: "sol",
+    activeView: "overview", // "overview" | "indicators" | "history" | "rules"
+    briefSubTab: "factors", // "factors" | "notes"
     chartMode: "price", // "price" | "equity" | "signal"
     range: "all", // "24" | "72" | "168" | "all"
     overlays: { ema: true, vwap: true, bb: true, sltp: true },
     briefingFilter: "all",
+    briefingVisibleCount: 10,
     expandedRunIds: new Set(),
     resizeTimer: null,
   };
@@ -156,12 +159,47 @@
   }
 
   // =========================================================================
-  // 1. TOP HERO SCOREBOARD: Large Decision Score Cards for All Assets
+  // 1. TOP HERO SCOREBOARD: Prominent Scores + Unified Account Selector
   // =========================================================================
+  function selectAsset(target, scrollCard = false) {
+    if (!target || target === state.selectedAsset) return;
+    state.selectedAsset = target;
+    state.expandedRunIds.clear();
+    state.briefingVisibleCount = 10;
+    try {
+      localStorage.setItem("quant_trader_selected_asset", target);
+    } catch (_) {}
+    renderSelectedAccount();
+    if (scrollCard) {
+      const card = document.querySelector(`.score-card[data-select-asset="${target}"]`);
+      if (card && window.innerWidth <= 760) {
+        card.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+      }
+    }
+  }
+
   function renderScoreboard() {
     const grid = $("asset-scoreboard");
-    const tabs = $("asset-tabs");
-    if (!grid || !tabs) return;
+    const mobilePills = $("mobile-asset-pills");
+    if (!grid) return;
+
+    if (mobilePills) {
+      mobilePills.innerHTML = state.assetOrder
+        .map((aid) => {
+          const acc = state.accounts[aid];
+          if (!acc) return "";
+          const meta = acc.meta || {};
+          const score = Number(acc.indicators?.quant_score ?? 0);
+          const isActive = aid === state.selectedAsset;
+          return `
+            <button type="button" role="tab" aria-selected="${isActive}" class="m-asset-pill ${isActive ? "active" : ""}" data-select-asset="${aid}" data-scroll-card="1">
+              <span class="m-pill-name">${escapeHtml(meta.name || aid)}</span>
+              <span class="m-pill-score num-display ${isActive ? "" : signClass(score)}" style="${isActive ? (score > 0 ? "color:var(--hero-pos)" : score < 0 ? "color:var(--hero-neg)" : "color:#fff") : ""}">${score > 0 ? "+" : ""}${score.toFixed(1)}</span>
+            </button>
+          `;
+        })
+        .join("");
+    }
 
     grid.innerHTML = state.assetOrder
       .map((aid) => {
@@ -176,7 +214,8 @@
         const score = Number(ind.quant_score ?? 0);
         const isActive = aid === state.selectedAsset;
         const isOpen = m.market_open !== false;
-        const openTxt = meta.market_type === "crypto" ? "24H 운영" : isOpen ? "정규장 개장" : "장 마감";
+        const openTxt = meta.market_type === "crypto" ? "24H" : isOpen ? "개장" : "장마감";
+        const typeShort = meta.market_type === "crypto" ? "코인" : meta.market_type === "kr_stock" ? "국내주식" : "미국주식";
 
         const actionLower = String(dec.action || "HOLD").toLowerCase();
         const actionTxt = { BUY: "BUY · 매수", SELL: "SELL · 매도", HOLD: "HOLD · 관망" }[dec.action] || dec.action;
@@ -186,18 +225,13 @@
         const barColor = score >= 24 ? "var(--pos)" : score <= -22 ? "var(--neg)" : "var(--accent-strategy)";
 
         return `
-          <button type="button" class="score-card ${isActive ? "active" : ""}" data-select-asset="${aid}">
+          <button type="button" role="tab" aria-selected="${isActive}" class="score-card ${isActive ? "active" : ""}" data-select-asset="${aid}">
             <div class="score-card-top">
-              <div>
-                <div class="score-asset-name">
-                  <strong>${escapeHtml(meta.name || aid)}</strong>
-                  <span class="score-asset-code num-display">${escapeHtml(meta.short_name || "")}</span>
-                </div>
-                <div class="score-market-sub">${escapeHtml(meta.market_label || "")}</div>
+              <div class="score-asset-name">
+                <strong>${escapeHtml(meta.name || aid)}</strong>
+                <span class="score-type-chip">${typeShort}</span>
               </div>
-              <div class="score-badges">
-                <span class="market-pill ${isOpen ? "is-open" : ""}">${openTxt}</span>
-              </div>
+              <span class="market-pill ${isOpen ? "is-open" : ""}">${openTxt}</span>
             </div>
 
             <div class="score-big-row">
@@ -231,32 +265,9 @@
       })
       .join("");
 
-    tabs.innerHTML = state.assetOrder
-      .map((aid) => {
-        const acc = state.accounts[aid];
-        if (!acc) return "";
-        const meta = acc.meta || {};
-        const isActive = aid === state.selectedAsset;
-        const typeShort = meta.market_type === "crypto" ? "코인" : meta.market_type === "kr_stock" ? "국내주식" : "미국주식";
-        return `
-          <button type="button" role="tab" aria-selected="${isActive}" class="asset-tab-btn ${isActive ? "active" : ""}" data-select-asset="${aid}">
-            <span>${escapeHtml(meta.name || aid)}</span>
-            <span class="asset-tab-tag">${typeShort}</span>
-          </button>
-        `;
-      })
-      .join("");
-
     document.querySelectorAll("[data-select-asset]").forEach((btn) => {
       btn.addEventListener("click", () => {
-        const target = btn.dataset.selectAsset;
-        if (!target || target === state.selectedAsset) return;
-        state.selectedAsset = target;
-        state.expandedRunIds.clear();
-        try {
-          localStorage.setItem("quant_trader_selected_asset", target);
-        } catch (_) {}
-        renderSelectedAccount();
+        selectAsset(btn.dataset.selectAsset, btn.dataset.scrollCard === "1");
       });
     });
   }
@@ -269,21 +280,14 @@
     $("engine-badge").textContent = dec.model_name === "quant-shortterm-v2" ? "퀀트 단타 v2" : `퀀트 (${dec.model_name || "v2"})`;
     $("last-updated").textContent = shortKst(state.rawPayload?.generated_at_kst || acc.generated_at_kst);
 
-    $("spot-label").textContent = `${meta.name || meta.short_name} 현재가`;
-    $("spot-price").textContent = fmtMoney(m.spot_price, acc);
-    const chEl = $("spot-change-24h");
-    chEl.textContent = fmtPct(m.change_24h_pct);
-    chEl.className = `num-display ticker-delta-pill ${signClass(m.change_24h_pct)}`;
-    chEl.title = `변동폭 ${fmtMoney(m.change_24h_krw, acc, true)}`;
-
-    $("spot-hl-24h").textContent = `${fmtMoney(m.high_24h, acc)} / ${fmtMoney(m.low_24h, acc)}`;
+    $("spot-hl-24h").textContent = `고/저 ${fmtMoney(m.high_24h, acc)} / ${fmtMoney(m.low_24h, acc)}`;
 
     const pill = $("market-status-pill");
     const isOpen = m.market_open !== false;
     pill.textContent = m.market_status_label || meta.market_status_label || (isOpen ? "운영 중" : "장 마감");
     pill.className = `market-pill ${isOpen ? "is-open" : ""}`;
 
-    $("footer-meta").textContent = `선택 출처: ${(meta.exchange_source || "upbit").toUpperCase()} (${meta.market}) · 생성 ${acc.generated_at_kst}`;
+    $("footer-meta").textContent = `${(meta.exchange_source || "upbit").toUpperCase()} (${meta.market}) · ${shortKst(acc.generated_at_kst)}`;
 
     const banner = $("status-banner");
     const messages = [];
@@ -431,6 +435,20 @@
     $("ind-bb").textContent = `%B ${Number(ind.bb_percent_b).toFixed(2)}`;
     $("ind-atr").textContent = `1h ATR ${Number(ind.atr14_pct).toFixed(2)}%`;
     $("ind-candles-count").textContent = `누적 1h 봉 ${(meta.candles_accumulated || acc.candles_recent?.length || 0).toLocaleString("ko-KR")}개`;
+    const costSplitSub = $("ind-cost-split-sub");
+    if (costSplitSub) {
+      costSplitSub.textContent = `거래량 ${Number(ind.volume_ratio_24h).toFixed(2)}x`;
+    }
+
+    const quickBar = $("quick-ind-items");
+    if (quickBar) {
+      quickBar.innerHTML = `
+        <span>RSI <strong>${rsi.toFixed(1)}</strong></span>
+        <span>추세 <strong>${alignLabel(fastAlign)}</strong></span>
+        <span>VWAP <strong class="${signClass(vwapDist)}">${fmtPct(vwapDist)}</strong></span>
+        <span>ATR <strong>${Number(ind.atr14_pct).toFixed(2)}%</strong></span>
+      `;
+    }
   }
 
   function renderLatestBriefing(acc) {
@@ -472,6 +490,7 @@
     $("pos-tp").textContent = s.take_profit_price_krw ? fmtMoney(s.take_profit_price_krw, acc) : "-";
     $("pos-cash").textContent = fmtMoney(s.cash_krw, acc);
 
+    const peekEl = $("briefing-pos-peek-txt");
     const barWrap = $("bracket-bar-wrap");
     if (hasPos) {
       const sl = Number(s.stop_loss_price_krw);
@@ -488,9 +507,15 @@
       const toTpPct = ((tp / spot) - 1) * 100;
       const toSlPct = ((sl / spot) - 1) * 100;
       $("bracket-status").textContent = `손절 ${toSlPct.toFixed(1)}% · 익절 +${toTpPct.toFixed(1)}%`;
+      if (peekEl) {
+        peekEl.textContent = `평단 ${fmtAxisMoney(entry, acc)} · SL ${fmtAxisMoney(sl, acc)} · TP ${fmtAxisMoney(tp, acc)}`;
+      }
       barWrap.classList.remove("hidden");
     } else {
       $("bracket-status").textContent = "보유 포지션 없음";
+      if (peekEl) {
+        peekEl.textContent = `전액 현금 관망 중 (${fmtMoney(s.cash_krw, acc)})`;
+      }
       barWrap.classList.add("hidden");
     }
   }
@@ -595,13 +620,14 @@
     const legendEl = $("chart-legend");
     const tooltip = $("chart-tooltip");
     const overlayBar = $("overlay-toggles");
+    if (!stage || stage.clientWidth < 40) return;
     tooltip.classList.add("hidden");
 
     overlayBar.classList.toggle("hidden", state.chartMode !== "price");
 
     const rect = stage.getBoundingClientRect();
-    const W = Math.max(300, Math.round(rect.width || 760));
-    const H = Math.max(280, Math.round(rect.height || 410));
+    const W = Math.max(280, Math.round(rect.width || 760));
+    const H = Math.max(260, Math.round(rect.height || 355));
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     svg.removeAttribute("preserveAspectRatio");
 
@@ -1143,6 +1169,8 @@
 
   function renderBriefingFeed(acc) {
     const container = $("briefing-feed");
+    const moreWrap = $("feed-more-wrap");
+    const moreBtn = $("btn-load-more");
     const all = acc.briefings || [];
     const filtered = all.filter((item) => {
       if (state.briefingFilter === "traded") return (item.executed_sides || []).length > 0;
@@ -1152,10 +1180,14 @@
 
     if (!filtered.length) {
       container.innerHTML = `<div class="empty-state">조건에 해당하는 브리핑 이력이 아직 없습니다.</div>`;
+      if (moreWrap) moreWrap.classList.add("hidden");
       return;
     }
 
-    container.innerHTML = filtered
+    const visible = filtered.slice(0, state.briefingVisibleCount);
+    const remaining = filtered.length - visible.length;
+
+    container.innerHTML = visible
       .map((item) => {
         const dec = item.decision;
         const actLower = dec.action.toLowerCase();
@@ -1194,6 +1226,15 @@
       })
       .join("");
 
+    if (moreWrap && moreBtn) {
+      if (remaining > 0) {
+        moreBtn.textContent = `이전 브리핑 더 보기 (남은 ${remaining}건)`;
+        moreWrap.classList.remove("hidden");
+      } else {
+        moreWrap.classList.add("hidden");
+      }
+    }
+
     container.querySelectorAll("[data-toggle-run]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const id = Number(btn.dataset.toggleRun);
@@ -1206,11 +1247,16 @@
 
   function renderTradesTable(acc) {
     const tbody = $("trades-tbody");
+    const cardsEl = $("trades-cards");
     const trades = acc.trades || [];
-    $("tab-trades-count").textContent = String(trades.length);
+    const countStr = String(trades.length);
+    $("tab-trades-count").textContent = countStr;
+    if ($("nav-trades-count")) $("nav-trades-count").textContent = countStr;
 
     if (!trades.length) {
-      tbody.innerHTML = `<tr><td colspan="11" class="empty-state">아직 체결된 모의 거래가 없습니다. 개장 중 진입 조건이 충족되면 자동으로 기록됩니다.</td></tr>`;
+      const emptyMsg = "아직 체결된 모의 거래가 없습니다. 개장 중 진입 조건이 충족되면 자동으로 기록됩니다.";
+      tbody.innerHTML = `<tr><td colspan="11" class="empty-state">${emptyMsg}</td></tr>`;
+      if (cardsEl) cardsEl.innerHTML = `<div class="empty-state">${emptyMsg}</div>`;
       return;
     }
 
@@ -1243,6 +1289,66 @@
         `;
       })
       .join("");
+
+    if (cardsEl) {
+      cardsEl.innerHTML = trades
+        .map((t) => {
+          const sideLower = t.side.toLowerCase();
+          const hasPnl = t.realized_pnl_krw !== null && t.realized_pnl_krw !== undefined;
+          const pnlText = hasPnl ? `${fmtMoney(t.realized_pnl_krw, acc, true)} (${fmtPct(t.realized_pnl_pct)})` : "-";
+          const slipBps = t.slippage_bps !== undefined && t.slippage_bps !== null ? `${Number(t.slippage_bps).toFixed(1)}bp` : "-";
+          return `
+            <article class="m-trade-card">
+              <div class="m-trade-top">
+                <div class="m-trade-left">
+                  <span class="badge-action ${sideLower}">${t.side}</span>
+                  <strong class="num-display" style="font-size:0.84rem">${fmtMoney(t.exec_price, acc)}</strong>
+                  <span style="font-size:0.72rem;color:var(--ink-muted)">${escapeHtml(triggerLabel(t.trigger))}</span>
+                </div>
+                <span class="mono m-trade-time">${escapeHtml(shortKst(t.time_kst))}</span>
+              </div>
+              <div class="m-trade-grid num-display">
+                <div class="m-trade-kv"><span>수량</span><strong>${fmtQty(t.sol_qty, acc)}</strong></div>
+                <div class="m-trade-kv"><span>거래금</span><strong>${fmtMoney(t.krw_amount, acc)}</strong></div>
+                <div class="m-trade-kv"><span>수수료/슬리피지</span><strong>${fmtMoney(t.fee_krw, acc)} · ${slipBps}</strong></div>
+                <div class="m-trade-kv"><span>실현손익</span><strong class="${hasPnl ? signClass(t.realized_pnl_krw) : ""}">${pnlText}</strong></div>
+              </div>
+              <div class="m-trade-reason">${escapeHtml(t.reason)}</div>
+            </article>
+          `;
+        })
+        .join("");
+    }
+  }
+
+  function switchView(target) {
+    if (!target) return;
+    state.activeView = target;
+    document.querySelectorAll("[data-view-tab]").forEach((btn) => {
+      const active = btn.dataset.viewTab === target;
+      btn.classList.toggle("active", active);
+      btn.setAttribute("aria-selected", String(active));
+    });
+    ["overview", "indicators", "history", "rules"].forEach((name) => {
+      const el = $(`view-${name}`);
+      if (el) el.classList.toggle("hidden", name !== target);
+    });
+    if (target === "overview" && currentAccount()) {
+      requestAnimationFrame(() => renderChart());
+    }
+  }
+
+  function switchBriefSubTab(target) {
+    state.briefSubTab = target;
+    document.querySelectorAll("[data-brief-tab]").forEach((btn) => {
+      const active = btn.dataset.briefTab === target;
+      btn.classList.toggle("active", active);
+      btn.setAttribute("aria-selected", String(active));
+    });
+    ["factors", "notes"].forEach((name) => {
+      const el = $(`brief-panel-${name}`);
+      if (el) el.classList.toggle("hidden", name !== target);
+    });
   }
 
   function renderSelectedAccount() {
@@ -1262,7 +1368,7 @@
     const refreshBtn = $("refresh-btn");
     const refreshLabel = $("refresh-label");
     refreshBtn.disabled = true;
-    refreshLabel.textContent = "갱신 중...";
+    if (refreshLabel) refreshLabel.textContent = "갱신 중";
     try {
       const resp = await fetch(`data/dashboard.json?t=${Date.now()}`, { cache: "no-store" });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -1292,7 +1398,7 @@
       banner.classList.remove("hidden");
     } finally {
       refreshBtn.disabled = false;
-      refreshLabel.textContent = "새로고침";
+      if (refreshLabel) refreshLabel.textContent = "새로고침";
     }
   }
 
@@ -1311,6 +1417,21 @@
     });
 
     $("refresh-btn").addEventListener("click", loadDashboardData);
+
+    // Primary Section View Tabs
+    document.querySelectorAll("[data-view-tab]").forEach((btn) => {
+      btn.addEventListener("click", () => switchView(btn.dataset.viewTab));
+    });
+
+    // Quick-Jump Links ("상세 지표 ->", "포지션 상세 ->")
+    document.querySelectorAll("[data-jump-view]").forEach((btn) => {
+      btn.addEventListener("click", () => switchView(btn.dataset.jumpView));
+    });
+
+    // Briefing Card Mini Sub-Tabs ("핵심 근거" | "리스크 · 관전")
+    document.querySelectorAll("[data-brief-tab]").forEach((btn) => {
+      btn.addEventListener("click", () => switchBriefSubTab(btn.dataset.briefTab));
+    });
 
     // Chart Mode Tabs
     document.querySelectorAll("[data-chart-mode]").forEach((btn) => {
@@ -1344,7 +1465,7 @@
       });
     });
 
-    // Ledger Tabs
+    // History Sub-Tabs ("시간별 브리핑" | "체결 원장")
     document.querySelectorAll("[data-ledger-tab]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const target = btn.dataset.ledgerTab;
@@ -1353,7 +1474,7 @@
           b.classList.toggle("active", active);
           b.setAttribute("aria-selected", String(active));
         });
-        ["briefings", "trades", "rules"].forEach((name) => {
+        ["briefings", "trades"].forEach((name) => {
           $(`panel-${name}`).classList.toggle("hidden", name !== target);
         });
         $("briefing-filters").classList.toggle("hidden", target !== "briefings");
@@ -1364,23 +1485,33 @@
     document.querySelectorAll("[data-filter]").forEach((btn) => {
       btn.addEventListener("click", () => {
         state.briefingFilter = btn.dataset.filter;
+        state.briefingVisibleCount = 10;
         document.querySelectorAll("[data-filter]").forEach((b) => b.classList.toggle("active", b === btn));
         if (currentAccount()) renderBriefingFeed(currentAccount());
       });
     });
 
+    // Briefing Load More Pagination
+    const loadMoreBtn = $("btn-load-more");
+    if (loadMoreBtn) {
+      loadMoreBtn.addEventListener("click", () => {
+        state.briefingVisibleCount += 15;
+        if (currentAccount()) renderBriefingFeed(currentAccount());
+      });
+    }
+
     // 1:1 Pixel SVG ResizeObserver
     const stage = $("chart-stage");
     if (typeof ResizeObserver !== "undefined" && stage) {
       const ro = new ResizeObserver(() => {
-        if (!currentAccount()) return;
+        if (!currentAccount() || state.activeView !== "overview") return;
         clearTimeout(state.resizeTimer);
         state.resizeTimer = setTimeout(() => renderChart(), 50);
       });
       ro.observe(stage);
     } else {
       window.addEventListener("resize", () => {
-        if (currentAccount()) renderChart();
+        if (currentAccount() && state.activeView === "overview") renderChart();
       });
     }
   }
