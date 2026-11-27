@@ -1,1 +1,25 @@
-[]
+[
+  {
+    "id": "T0001",
+    "time_kst": "2026-11-28 02:22:34 KST",
+    "time_utc": "2026-11-27T17:22:34Z",
+    "side": "BUY",
+    "trigger": "quant_shortterm",
+    "engine": "quant-shortterm-v2",
+    "spot_price": 149.31,
+    "exec_price": 149.51,
+    "slippage_bps": 13.49,
+    "slippage_krw": 4.71,
+    "slippage_breakdown": {
+      "book_bps": 5.25,
+      "vol_bps": 8.24,
+      "event_bps": 0.0
+    },
+    "sol_qty": 23.39,
+    "krw_amount": 3499.52,
+    "fee_krw": 2.45,
+    "realized_pnl_krw": null,
+    "realized_pnl_pct": null,
+    "reason": "단기 추세 전환(점수 +29.0) — 가용 현금 35% 분할 매수"
+  }
+]
