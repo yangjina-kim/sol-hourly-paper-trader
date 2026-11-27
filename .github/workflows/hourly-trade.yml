@@ -1,4 +1,4 @@
-name: Hourly SOL/KRW Quant Trader
+name: Hourly Multi-Asset Quant Trader
 
 on:
   schedule:
@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   trade:
-    name: Run Hourly Quant Trading Cycle
+    name: Run Hourly Multi-Asset Quant Cycle
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -55,7 +55,7 @@ jobs:
             exit 0
           fi
           TS_KST=$(TZ=Asia/Seoul date "+%Y-%m-%d %H:%M KST")
-          git commit -m "chore(trade): hourly SOL/KRW quant briefing (${TS_KST}) [skip ci]"
+          git commit -m "chore(trade): hourly multi-asset quant briefing (${TS_KST}) [skip ci]"
           git pull --rebase origin main
           git push origin main
 

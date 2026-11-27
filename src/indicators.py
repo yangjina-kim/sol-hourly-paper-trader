@@ -378,3 +378,63 @@ def compute_indicators(snapshot: MarketSnapshot) -> dict[str, Any]:
         "regime_kr": regime_kr,
         "quant_score": quant_score,
     }
+
+
+def compute_candle_indicator_series(candles_1h: list[Candle], limit: int = 240, decimals: int = 1) -> list[dict[str, Any]]:
+    """Compute per-candle strategy indicator overlay series (EMA5/13/21, 12h VWAP, BB, RSI14, Fast MACD) for charts."""
+    if not candles_1h:
+        return []
+    closes = [c.close for c in candles_1h]
+    ema5_all = ema_series(closes, 5)
+    ema13_all = ema_series(closes, 13)
+    ema21_all = ema_series(closes, 21)
+    rsi_all = rsi_series(closes, 14)
+
+    fast_ema = ema_series(closes, 8)
+    slow_ema = ema_series(closes, 17)
+    macd_line_all = [f - s for f, s in zip(fast_ema, slow_ema)]
+    macd_sig_all = ema_series(macd_line_all, 6)
+    macd_hist_all = [m - s for m, s in zip(macd_line_all, macd_sig_all)]
+
+    start_idx = max(0, len(candles_1h) - limit)
+    out: list[dict[str, Any]] = []
+    for i in range(start_idx, len(candles_1h)):
+        c = candles_1h[i]
+        # 12h rolling VWAP
+        w_start = max(0, i - 11)
+        sub_c = candles_1h[w_start : i + 1]
+        tot_vol = sum(x.volume for x in sub_c)
+        if tot_vol > 0:
+            vwap12 = sum(((x.high + x.low + x.close) / 3.0) * x.volume for x in sub_c) / tot_vol
+        else:
+            vwap12 = c.close
+
+        # 20-bar Bollinger Bands
+        bb_start = max(0, i - 19)
+        bb_win = closes[bb_start : i + 1]
+        bb_mid = sum(bb_win) / len(bb_win)
+        bb_std = statistics.pstdev(bb_win) if len(bb_win) >= 2 else 0.0
+        bb_up = bb_mid + 2.0 * bb_std
+        bb_lo = bb_mid - 2.0 * bb_std
+
+        out.append(
+            {
+                "ts": c.timestamp_ms,
+                "time_kst": c.time_kst,
+                "open": round(c.open, decimals),
+                "high": round(c.high, decimals),
+                "low": round(c.low, decimals),
+                "close": round(c.close, decimals),
+                "volume": round(c.volume, 2),
+                "ema5": round(ema5_all[i], decimals),
+                "ema13": round(ema13_all[i], decimals),
+                "ema21": round(ema21_all[i], decimals),
+                "vwap12": round(vwap12, decimals),
+                "bb_upper": round(bb_up, decimals),
+                "bb_lower": round(bb_lo, decimals),
+                "rsi14": round(rsi_all[i], 2),
+                "macd_hist": round(macd_hist_all[i], max(2, decimals)),
+            }
+        )
+    return out
+

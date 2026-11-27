@@ -1,4 +1,4 @@
-"""Pure deterministic 1-hour short-term quantitative trading strategy for KRW-SOL."""
+"""Pure deterministic 1-hour short-term quantitative trading strategy for Crypto, KRX, and NASDAQ."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from .config import (
+    ASSETS,
     DEFAULT_STOP_LOSS_PCT,
     DEFAULT_TAKE_PROFIT_PCT,
     MAX_POSITION_RATIO,
@@ -14,6 +15,7 @@ from .config import (
     MIN_STOP_LOSS_PCT,
     MIN_TAKE_PROFIT_PCT,
     TIME_STOP_HOURS,
+    AssetConfig,
 )
 from .market_data import MarketSnapshot
 
@@ -21,7 +23,7 @@ from .market_data import MarketSnapshot
 @dataclass
 class TradingDecision:
     action: str  # "BUY" | "SELL" | "HOLD"
-    order_pct: float  # BUY: % of available KRW cash (0..100); SELL: % of held SOL (0..100); HOLD: 0
+    order_pct: float  # BUY: % of available cash (0..100); SELL: % of held qty (0..100); HOLD: 0
     confidence: int  # 0..100
     stop_loss_pct: float
     take_profit_pct: float
@@ -41,7 +43,9 @@ def _clamp(val: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, val))
 
 
-def _format_krw(value: float) -> str:
+def format_price(value: float, asset: AssetConfig) -> str:
+    if asset.quote_currency == "USD":
+        return f"${value:,.2f}"
     return f"{round(value):,}원"
 
 
@@ -49,8 +53,11 @@ def decide_trade(
     snapshot: MarketSnapshot,
     indicators: dict[str, Any],
     portfolio_context: dict[str, Any],
+    *,
+    asset: AssetConfig | None = None,
 ) -> TradingDecision:
     """Short-term 1h quant decision engine: fast EMA5/13 + MACD(8,17,6) + 12h VWAP + Time-Stop."""
+    cfg = asset or ASSETS["sol"]
     spot = snapshot.spot_price
     score = float(indicators["quant_score"])
     rsi14 = float(indicators["rsi14"])
@@ -71,7 +78,7 @@ def decide_trade(
     regime_kr = str(indicators["regime_kr"])
 
     exposure_pct = float(portfolio_context["exposure_pct"])
-    sol_qty = float(portfolio_context["sol_qty"])
+    held_qty = float(portfolio_context["sol_qty"])
     unrealized_pct = float(portfolio_context["unrealized_pnl_pct"])
     holding_hours = float(portfolio_context.get("holding_hours", 0.0))
     circuit_breaker = bool(portfolio_context["daily_circuit_breaker_active"])
@@ -88,16 +95,18 @@ def decide_trade(
     headline = f"{regime_kr} — 관망 유지"
 
     can_buy = (
-        (not circuit_breaker)
+        snapshot.market_open
+        and (not circuit_breaker)
         and (not sl_cooldown)
         and (not same_candle_traded)
         and (exposure_pct < (MAX_POSITION_RATIO * 100.0 - 8.0))
     )
-    has_position = sol_qty > 1e-8 and exposure_pct >= 2.0
+    has_position = held_qty > 1e-8 and exposure_pct >= 2.0
 
     # Short-term Time-Stop: flat stagnation for >= 12h without bullish momentum
     time_stop_triggered = (
-        has_position
+        snapshot.market_open
+        and has_position
         and holding_hours >= TIME_STOP_HOURS
         and (-0.8 <= unrealized_pct <= 0.8)
         and score < 15.0
@@ -106,7 +115,11 @@ def decide_trade(
     # Oversold bounce sniping condition
     oversold_bounce = (rsi14 <= 35.0 and rsi14 > rsi_prev and bb_b <= 0.22 and macd_delta > 0)
 
-    if time_stop_triggered:
+    if not snapshot.market_open:
+        action = "HOLD"
+        order_pct = 0.0
+        headline = f"{snapshot.market_status_label} — 지표 점수 {score:+.1f}점 (개장 대기)"
+    elif time_stop_triggered:
         action = "SELL"
         order_pct = 100.0
         confidence = 72
@@ -156,16 +169,21 @@ def decide_trade(
         elif score >= 14.0:
             headline = f"매수 임계치(+24) 근접(점수 {score:+.1f}) — 진입 대기"
         else:
-            headline = f"단기 방향성 혼조(점수 {score:+.1f}) — 수수료 절감 관망"
+            headline = f"단기 방향성 혼조(점수 {score:+.1f}) — 거래비용 절감 관망"
 
     fast_kr = {"bullish": "강세(EMA5>13)", "bearish": "약세(EMA5<13)", "mixed": "혼조"}[fast_align]
     htf_kr = {"uptrend": "상승", "downtrend": "하락", "sideways": "횡보"}[htf_trend]
     macd_dir = "개선" if macd_delta >= 0 else "둔화"
+    rt_cost_pct = (cfg.buy_fee_rate + cfg.sell_fee_rate + cfg.base_slippage_rate * 2.0) * 100.0
 
-    if action == "BUY":
+    if not snapshot.market_open:
         action_sentence = (
-            f"단기 퀀트 점수 {score:+.1f}점(EMA5 {_format_krw(ema5)} / EMA13 {_format_krw(ema13)})으로 "
-            f"왕복 거래비용(수수료+슬리피지 약 0.27%)을 감안한 진입 조건을 충족해 가용 현금의 {order_pct:.0f}%를 매수하며, "
+            f"현재 {snapshot.market_status_label} 상태이므로 주문을 실행하지 않고 최신 종가 기준 지표 점수({score:+.1f}점)만 갱신하며 다음 개장을 대기합니다."
+        )
+    elif action == "BUY":
+        action_sentence = (
+            f"단기 퀀트 점수 {score:+.1f}점(EMA5 {format_price(ema5, cfg)} / EMA13 {format_price(ema13, cfg)})으로 "
+            f"왕복 거래비용(약 {rt_cost_pct:.2f}%)을 감안한 진입 기준을 충족해 가용 현금의 {order_pct:.0f}%를 매수하며, "
             f"손절 -{sl_pct:.1f}% / 익절 +{tp_pct:.1f}%를 설정합니다."
         )
     elif action == "SELL":
@@ -177,37 +195,37 @@ def decide_trade(
         else:
             action_sentence = (
                 f"단기 모멘텀 약화 또는 과열 신호(점수 {score:+.1f}, RSI {rsi14:.1f})가 확인되어 "
-                f"보유 SOL의 {order_pct:.0f}%를 매도해 수익 보존 및 손실 제한에 나섭니다."
+                f"보유 {cfg.short_name}의 {order_pct:.0f}%를 매도해 수익 보존 및 손실 제한에 나섭니다."
             )
     elif not has_position and score <= -15.0:
         action_sentence = (
-            f"단기 퀀트 점수({score:+.1f}점)가 약세 구간에 머물러 불필요한 역추세 진입을 피하고 전액 원화 관망을 유지합니다."
+            f"단기 퀀트 점수({score:+.1f}점)가 약세 구간에 머물러 성급한 역추세 진입을 피하고 전액 현금 관망을 유지합니다."
         )
     else:
         action_sentence = (
-            f"단기 퀀트 점수({score:+.1f}점)가 매수(+24)·매도(-22) 임계치 사이에 위치해 불필요한 매매 비용 소모를 막고 현 상태를 유지합니다."
+            f"단기 퀀트 점수({score:+.1f}점)가 매수(+24)·매도(-22) 임계치 사이에 위치해 불필요한 거래비용 소모를 막고 현 포지션을 유지합니다."
         )
 
     briefing_summary = (
-        f"업비트 KRW-SOL 현재가는 {_format_krw(spot)}(24h {snapshot.change_24h_pct:+.2f}%)이며 {regime_kr} 흐름입니다. "
+        f"{cfg.name}({cfg.short_name}) 현재가는 {format_price(spot, cfg)}(변동 {snapshot.change_24h_pct:+.2f}%)이며 {regime_kr} 흐름입니다. "
         f"단기 EMA5/13은 {fast_kr}, 12h VWAP 대비 {dist_vwap12:+.2f}%, RSI(14)는 {rsi14:.1f}(직전 {rsi_prev:.1f})입니다. "
         f"{action_sentence}"
     )
 
     key_factors = [
-        f"초단기 추세: EMA5 {_format_krw(ema5)} / EMA13 {_format_krw(ema13)} ({fast_kr}) · 4h 중기 {htf_kr}",
-        f"단기 모멘텀: Fast MACD(8,17,6) 히스토그램 {macd_hist:+.1f}({macd_dir}), RSI(14) {rsi14:.1f}",
-        f"장중 기준가: 12h VWAP {_format_krw(vwap12)} ({dist_vwap12:+.2f}%), 12h 채널 {_format_krw(dc_low)} ~ {_format_krw(dc_high)}",
-        f"수급·변동성: 거래량 평균 대비 {vol_ratio:.2f}배, ATR(14) {atr_pct:.2f}%, 호가 불균형 {indicators['orderbook_imbalance']:+.2f}",
+        f"초단기 추세: EMA5 {format_price(ema5, cfg)} / EMA13 {format_price(ema13, cfg)} ({fast_kr}) · 4h 중기 {htf_kr}",
+        f"단기 모멘텀: Fast MACD(8,17,6) 히스토그램 {macd_hist:+.2f}({macd_dir}), RSI(14) {rsi14:.1f}",
+        f"장중 기준가: 12h VWAP {format_price(vwap12, cfg)} ({dist_vwap12:+.2f}%), 12h 채널 {format_price(dc_low, cfg)} ~ {format_price(dc_high, cfg)}",
+        f"수급·변동성: 거래량 평균 대비 {vol_ratio:.2f}배, ATR(14) {atr_pct:.2f}%, 호가 스프레드 {indicators['spread_bps']:.1f}bp",
     ]
 
     risk_notes = (
-        f"12시간 단기 지지선은 {_format_krw(dc_low)}, 저항선은 {_format_krw(dc_high)}입니다. "
-        f"시간당 변동성(ATR {atr_pct:.2f}%)과 왕복 체결비용(~0.27%)을 감안해 수익 +1.2% 도달 시 본절 트레일링 보호가 자동 가동됩니다."
+        f"12시간 단기 지지선은 {format_price(dc_low, cfg)}, 저항선은 {format_price(dc_high, cfg)}입니다. "
+        f"시간당 변동성(ATR {atr_pct:.2f}%)과 왕복 비용(~{rt_cost_pct:.2f}%)을 감안해 수익 +1.2% 도달 시 본절 트레일링 보호가 자동 가동됩니다."
     )
     next_watch = (
-        f"다음 1시간 동안 EMA13({_format_krw(ema13)}) 및 12h VWAP({_format_krw(vwap12)}) 지지·돌파 여부와 "
-        f"단기 저항 {_format_krw(dc_high)} 테스트를 관찰합니다."
+        f"다음 회차에는 EMA13({format_price(ema13, cfg)}) 및 12h VWAP({format_price(vwap12, cfg)}) 지지·돌파 여부와 "
+        f"단기 저항 {format_price(dc_high, cfg)} 테스트를 관찰합니다."
     )
 
     return TradingDecision(

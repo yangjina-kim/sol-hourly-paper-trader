@@ -9,9 +9,9 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from src.config import FEE_RATE, INITIAL_CAPITAL_KRW, KST, MAX_POSITION_RATIO
-from src.indicators import compute_indicators, rsi_series
-from src.market_data import Candle, MarketSnapshot
+from src.config import ASSETS, FEE_RATE, INITIAL_CAPITAL_KRW, KST, MAX_POSITION_RATIO
+from src.indicators import compute_candle_indicator_series, compute_indicators, rsi_series
+from src.market_data import Candle, MarketSnapshot, is_market_open, merge_candles
 from src.portfolio import (
     build_portfolio_context,
     check_intrabar_triggers,
@@ -21,6 +21,7 @@ from src.portfolio import (
     portfolio_equity,
     refresh_daily_guardrails,
 )
+from src.report_builder import extract_version_changes
 from src.run_cycle import run_hourly_cycle
 from src.strategy import TradingDecision, decide_trade
 
@@ -33,17 +34,23 @@ def _make_synthetic_snapshot(
     override_last_low: float | None = None,
     override_last_high: float | None = None,
     spot_override: float | None = None,
+    market: str = "KRW-SOL",
+    source: str = "upbit",
+    market_open: bool = True,
+    market_status_label: str = "24시간 운영 중",
+    bar_range: float | None = None,
 ) -> MarketSnapshot:
     now_utc = datetime(2026, 11, 25, 12, 17, 0, tzinfo=timezone.utc) + timedelta(hours=hour_offset)
     now_kst = now_utc.astimezone(KST)
+    half_range = bar_range if bar_range is not None else max(base_price * 0.0048, 0.5)
 
     candles_1h: list[Candle] = []
     for i in range(180):
         bar_dt = now_utc.replace(minute=0, second=0, microsecond=0) - timedelta(hours=180 - i)
         close = base_price + (i - 120) * trend_per_bar + math.sin(i / 4.5) * wave_amp
         open_p = close - trend_per_bar * 0.5
-        high = max(open_p, close) + 1_200.0
-        low = min(open_p, close) - 1_200.0
+        high = max(open_p, close) + half_range
+        low = min(open_p, close) - half_range
         if i == 179:
             if override_last_low is not None:
                 low = override_last_low
@@ -55,10 +62,10 @@ def _make_synthetic_snapshot(
                 timestamp_ms=int(bar_dt.timestamp() * 1000),
                 time_utc=bar_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
                 time_kst=bar_dt.astimezone(KST).strftime("%Y-%m-%d %H:%M:%S KST"),
-                open=round(open_p, 1),
-                high=round(high, 1),
-                low=round(low, 1),
-                close=round(close, 1),
+                open=round(open_p, 2),
+                high=round(high, 2),
+                low=round(low, 2),
+                close=round(close, 2),
                 volume=vol,
                 quote_volume=close * vol,
             )
@@ -67,24 +74,26 @@ def _make_synthetic_snapshot(
     candles_4h = candles_1h[::4][-55:]
     spot = spot_override if spot_override is not None else candles_1h[-1].close
     return MarketSnapshot(
-        source="upbit",
-        market="KRW-SOL",
+        source=source,
+        market=market,
         fetched_at_utc=now_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
         fetched_at_kst=now_kst.strftime("%Y-%m-%d %H:%M:%S KST"),
         spot_price=spot,
         change_24h_pct=round(((spot / candles_1h[-24].close) - 1.0) * 100.0, 2),
-        change_24h_krw=round(spot - candles_1h[-24].close, 1),
+        change_24h_krw=round(spot - candles_1h[-24].close, 2),
         high_24h=max(c.high for c in candles_1h[-24:]),
         low_24h=min(c.low for c in candles_1h[-24:]),
         volume_24h_sol=sum(c.volume for c in candles_1h[-24:]),
         turnover_24h_krw=sum(c.quote_volume for c in candles_1h[-24:]),
-        best_ask=spot + 50.0,
-        best_bid=spot - 50.0,
+        best_ask=spot + (spot * 0.0002),
+        best_bid=spot - (spot * 0.0002),
         spread_bps=4.0,
         orderbook_imbalance=0.15,
         candles_1h=candles_1h,
         current_candle_1h=None,
         candles_4h=candles_4h,
+        market_open=market_open,
+        market_status_label=market_status_label,
     )
 
 
@@ -364,10 +373,297 @@ class TestSolPaperTrader(unittest.TestCase):
             self.assertEqual(len(payload["series"]), 3)
             self.assertTrue(dash_path.exists())
             saved_dash = json.loads(dash_path.read_text(encoding="utf-8"))
-            self.assertEqual(saved_dash["summary"]["run_count"], 3)
-            self.assertEqual(saved_dash["latest_briefing"]["decision"]["model_name"], "quant-shortterm-v2")
-            self.assertIn("cumulative_slippage_krw", saved_dash["summary"])
-            self.assertIn("최신 정각 브리핑", readme_path.read_text(encoding="utf-8"))
+            self.assertEqual(saved_dash["schema_version"], 2)
+            self.assertEqual(saved_dash["accounts"]["sol"]["summary"]["run_count"], 3)
+            self.assertEqual(saved_dash["accounts"]["sol"]["latest_briefing"]["decision"]["model_name"], "quant-shortterm-v2")
+            self.assertIn("cumulative_slippage_krw", saved_dash["accounts"]["sol"]["summary"])
+            self.assertIn("최신 정각 멀티 계좌 브리핑", readme_path.read_text(encoding="utf-8"))
+
+    def test_extract_version_changes_detects_engine_transition(self) -> None:
+        history = [
+            {
+                "run_id": 1,
+                "time_kst": "2026-11-25 18:17:00 KST",
+                "time_utc": "2026-11-25T09:17:00Z",
+                "decision": {"model_name": "quant-multifactor-v1"},
+            },
+            {
+                "run_id": 2,
+                "time_kst": "2026-11-25 19:17:00 KST",
+                "time_utc": "2026-11-25T10:17:00Z",
+                "decision": {"model_name": "quant-multifactor-v1"},
+            },
+            {
+                "run_id": 3,
+                "time_kst": "2026-11-25 20:17:00 KST",
+                "time_utc": "2026-11-25T11:17:00Z",
+                "decision": {"model_name": "quant-shortterm-v2"},
+            },
+            {
+                "run_id": 4,
+                "time_kst": "2026-11-25 21:17:00 KST",
+                "time_utc": "2026-11-25T12:17:00Z",
+                "decision": {"model_name": "quant-shortterm-v2"},
+            },
+        ]
+        changes = extract_version_changes(history)
+        self.assertEqual(len(changes), 1)
+        self.assertEqual(changes[0]["run_id"], 3)
+        self.assertEqual(changes[0]["from_model"], "quant-multifactor-v1")
+        self.assertEqual(changes[0]["to_model"], "quant-shortterm-v2")
+        self.assertEqual(changes[0]["label"], "v2 전환")
+
+    def test_merge_candles_and_indicator_overlay_series(self) -> None:
+        snap1 = _make_synthetic_snapshot(hour_offset=0)
+        snap2 = _make_synthetic_snapshot(hour_offset=2)
+        merged = merge_candles(snap1.candles_1h, snap2.candles_1h)
+        self.assertEqual(len(merged), len(snap1.candles_1h) + 2)
+        self.assertEqual(len({c.timestamp_ms for c in merged}), len(merged))
+
+        overlay = compute_candle_indicator_series(merged, limit=120, decimals=1)
+        self.assertEqual(len(overlay), 120)
+        last = overlay[-1]
+        for key in ("ts", "open", "high", "low", "close", "ema5", "ema13", "vwap12", "bb_upper", "bb_lower", "rsi14", "macd_hist"):
+            self.assertIn(key, last)
+            self.assertIsNotNone(last[key])
+
+    def test_market_hours_crypto_krx_nasdaq(self) -> None:
+        # Crypto is always open (even Sunday)
+        sun_utc = datetime(2026, 11, 29, 3, 0, tzinfo=timezone.utc)
+        self.assertTrue(is_market_open("crypto", sun_utc)[0])
+        self.assertFalse(is_market_open("kr_stock", sun_utc)[0])
+        self.assertFalse(is_market_open("us_stock", sun_utc)[0])
+
+        # Wednesday 10:17 KST = 01:17 UTC -> KRX open, NASDAQ closed
+        krx_open_utc = datetime(2026, 11, 25, 1, 17, tzinfo=timezone.utc)
+        self.assertTrue(is_market_open("kr_stock", krx_open_utc)[0])
+        self.assertFalse(is_market_open("us_stock", krx_open_utc)[0])
+
+        # Wednesday 11:17 EST (winter) = 16:17 UTC -> NASDAQ open, KRX closed
+        us_open_utc = datetime(2026, 11, 25, 16, 17, tzinfo=timezone.utc)
+        self.assertFalse(is_market_open("kr_stock", us_open_utc)[0])
+        self.assertTrue(is_market_open("us_stock", us_open_utc)[0])
+
+    def test_hynix_integer_shares_and_krx_sell_tax(self) -> None:
+        hynix = ASSETS["hynix"]
+        snap = _make_synthetic_snapshot(
+            base_price=210_000.0,
+            trend_per_bar=0.0,
+            wave_amp=0.0,
+            spot_override=210_000.0,
+            market=hynix.symbol,
+            source="yahoo",
+            market_open=True,
+            market_status_label="KRX 정규장 개장",
+        )
+        state = create_initial_state(snap, asset=hynix)
+        buy_dec = TradingDecision(
+            action="BUY",
+            order_pct=40.0,
+            confidence=82,
+            stop_loss_pct=2.0,
+            take_profit_pct=4.0,
+            headline="하이닉스 매수",
+            briefing_summary="테스트",
+            key_factors=["테스트"],
+            risk_notes="테스트",
+            next_watch="테스트",
+        )
+        t_buy, note = execute_decision(state, snap, buy_dec, asset=hynix)
+        self.assertIsNotNone(t_buy)
+        self.assertIsNone(note)
+        # Must buy whole integer shares only
+        self.assertEqual(t_buy["sol_qty"], float(int(t_buy["sol_qty"])))
+        self.assertEqual(state["sol_qty"], float(int(state["sol_qty"])))
+        self.assertAlmostEqual(t_buy["fee_krw"], round(t_buy["krw_amount"] * hynix.buy_fee_rate), delta=2)
+
+        sell_dec = TradingDecision(
+            action="SELL",
+            order_pct=100.0,
+            confidence=80,
+            stop_loss_pct=2.0,
+            take_profit_pct=4.0,
+            headline="하이닉스 전량 매도",
+            briefing_summary="테스트",
+            key_factors=["테스트"],
+            risk_notes="테스트",
+            next_watch="테스트",
+        )
+        t_sell, _ = execute_decision(state, snap, sell_dec, asset=hynix)
+        self.assertIsNotNone(t_sell)
+        self.assertEqual(state["sol_qty"], 0.0)
+        # KRX sell fee + STT (0.165%)
+        self.assertAlmostEqual(t_sell["fee_krw"], round(t_sell["krw_amount"] * hynix.sell_fee_rate), delta=2)
+
+    def test_nvda_usd_fractional_shares(self) -> None:
+        nvda = ASSETS["nvda"]
+        snap = _make_synthetic_snapshot(
+            base_price=140.0,
+            trend_per_bar=0.0,
+            wave_amp=0.0,
+            spot_override=140.0,
+            market=nvda.symbol,
+            source="yahoo",
+            market_open=True,
+            market_status_label="NASDAQ 정규장 개장",
+            bar_range=0.8,
+        )
+        state = create_initial_state(snap, asset=nvda)
+        self.assertEqual(state["initial_capital_krw"], 10_000.0)
+        buy_dec = TradingDecision(
+            action="BUY",
+            order_pct=35.0,
+            confidence=80,
+            stop_loss_pct=2.0,
+            take_profit_pct=4.0,
+            headline="NVDA 매수",
+            briefing_summary="테스트",
+            key_factors=["테스트"],
+            risk_notes="테스트",
+            next_watch="테스트",
+        )
+        t_buy, note = execute_decision(state, snap, buy_dec, asset=nvda)
+        self.assertIsNotNone(t_buy)
+        self.assertIsNone(note)
+        self.assertGreater(state["sol_qty"], 20.0)
+        self.assertAlmostEqual(t_buy["fee_krw"], round(t_buy["krw_amount"] * nvda.buy_fee_rate, 2), delta=0.05)
+
+    def test_closed_stock_market_initializes_without_phantom_trades(self) -> None:
+        hynix = ASSETS["hynix"]
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            data_dir = tmp_path / "data"
+            dash_path = tmp_path / "docs" / "data" / "dashboard.json"
+            readme_path = tmp_path / "README.md"
+            readme_path.write_text("# Test\n<!-- LIVE_SUMMARY_START -->\nold\n<!-- LIVE_SUMMARY_END -->\n", encoding="utf-8")
+
+            closed_snap = _make_synthetic_snapshot(
+                base_price=210_000.0,
+                trend_per_bar=500.0,
+                wave_amp=600.0,
+                market=hynix.symbol,
+                source="yahoo",
+                market_open=False,
+                market_status_label="KRX 장 마감 (평일 09:00~15:30 KST)",
+            )
+            m1 = run_hourly_cycle(
+                snapshots_by_asset={"hynix": closed_snap},
+                asset_ids=["hynix"],
+                data_dir=data_dir,
+                dashboard_path=dash_path,
+                readme_path=readme_path,
+            )
+            acc1 = m1["accounts"]["hynix"]
+            self.assertEqual(acc1["summary"]["run_count"], 1)
+            self.assertEqual(acc1["latest_briefing"]["decision"]["action"], "HOLD")
+            self.assertEqual(acc1["summary"]["total_trades"], 0)
+            self.assertFalse(acc1["market"]["market_open"])
+
+            # Second closed run must NOT increment run_count or execute trades
+            closed_snap2 = _make_synthetic_snapshot(
+                base_price=210_000.0,
+                trend_per_bar=500.0,
+                wave_amp=600.0,
+                hour_offset=1,
+                market=hynix.symbol,
+                source="yahoo",
+                market_open=False,
+                market_status_label="KRX 장 마감 (평일 09:00~15:30 KST)",
+            )
+            m2 = run_hourly_cycle(
+                snapshots_by_asset={"hynix": closed_snap2},
+                asset_ids=["hynix"],
+                data_dir=data_dir,
+                dashboard_path=dash_path,
+                readme_path=readme_path,
+            )
+            acc2 = m2["accounts"]["hynix"]
+            self.assertEqual(acc2["summary"]["run_count"], 1)
+            self.assertEqual(len(acc2["series"]), 1)
+            self.assertEqual(acc2["summary"]["total_trades"], 0)
+
+    def test_multi_asset_cycle_and_legacy_sol_migration(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            data_dir = tmp_path / "data"
+            data_dir.mkdir(parents=True, exist_ok=True)
+            dash_path = tmp_path / "docs" / "data" / "dashboard.json"
+            readme_path = tmp_path / "README.md"
+            readme_path.write_text("# Test\n<!-- LIVE_SUMMARY_START -->\nold\n<!-- LIVE_SUMMARY_END -->\n", encoding="utf-8")
+
+            # Seed legacy SOL data with v1 model_name to verify seamless migration & version change detection
+            legacy_sol_snap = _make_synthetic_snapshot(base_price=100_000.0, trend_per_bar=200.0, wave_amp=500.0, hour_offset=0)
+            legacy_state = create_initial_state(legacy_sol_snap, asset=ASSETS["sol"])
+            legacy_state["run_count"] = 1
+            legacy_history = [
+                {
+                    "run_id": 1,
+                    "time_kst": "2026-11-25 18:17:00 KST",
+                    "time_utc": "2026-11-25T09:17:00Z",
+                    "spot_price": 100_000.0,
+                    "change_24h_pct": 1.0,
+                    "equity_krw": 10_000_000.0,
+                    "benchmark_krw": 10_000_000.0,
+                    "return_pct": 0.0,
+                    "benchmark_return_pct": 0.0,
+                    "cash_krw": 10_000_000.0,
+                    "sol_qty": 0.0,
+                    "exposure_pct": 0.0,
+                    "indicators": {"quant_score": 12.0, "rsi14": 50.0},
+                    "decision": {"action": "HOLD", "model_name": "quant-multifactor-v1", "headline": "v1 관망"},
+                    "executed_sides": [],
+                }
+            ]
+            (data_dir / "state.json").write_text(json.dumps(legacy_state), encoding="utf-8")
+            (data_dir / "history.json").write_text(json.dumps(legacy_history), encoding="utf-8")
+            (data_dir / "trades.json").write_text("[]", encoding="utf-8")
+
+            snaps = {
+                "sol": _make_synthetic_snapshot(base_price=102_000.0, trend_per_bar=300.0, wave_amp=500.0, hour_offset=1),
+                "hynix": _make_synthetic_snapshot(
+                    base_price=215_000.0,
+                    trend_per_bar=400.0,
+                    wave_amp=800.0,
+                    hour_offset=1,
+                    market="000660.KS",
+                    source="yahoo",
+                    market_open=True,
+                    market_status_label="KRX 정규장 개장",
+                ),
+                "nvda": _make_synthetic_snapshot(
+                    base_price=142.0,
+                    trend_per_bar=0.4,
+                    wave_amp=0.6,
+                    hour_offset=1,
+                    market="NVDA",
+                    source="yahoo",
+                    market_open=True,
+                    market_status_label="NASDAQ 정규장 개장",
+                    bar_range=0.8,
+                ),
+            }
+            multi = run_hourly_cycle(
+                snapshots_by_asset=snaps,
+                data_dir=data_dir,
+                dashboard_path=dash_path,
+                readme_path=readme_path,
+            )
+            self.assertEqual(multi["schema_version"], 2)
+            self.assertEqual(set(multi["accounts"].keys()), {"sol", "hynix", "nvda"})
+
+            sol_acc = multi["accounts"]["sol"]
+            self.assertEqual(sol_acc["summary"]["run_count"], 2)
+            self.assertEqual(len(sol_acc["version_changes"]), 1)
+            self.assertEqual(sol_acc["version_changes"][0]["label"], "v2 전환")
+            self.assertGreater(len(sol_acc["candles_recent"]), 50)
+            self.assertTrue((data_dir / "accounts" / "sol" / "candles.json").exists())
+            self.assertTrue((data_dir / "accounts" / "hynix" / "candles.json").exists())
+            self.assertTrue((data_dir / "accounts" / "nvda" / "candles.json").exists())
+
+            readme_txt = readme_path.read_text(encoding="utf-8")
+            self.assertIn("솔라나", readme_txt)
+            self.assertIn("SK하이닉스", readme_txt)
+            self.assertIn("엔비디아", readme_txt)
 
 
 if __name__ == "__main__":

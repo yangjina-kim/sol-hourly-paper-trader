@@ -1,49 +1,53 @@
-"""Paper trading portfolio ledger, intrabar SL/TP triggers, risk guardrails, and analytics."""
+"""Multi-asset paper trading portfolio ledger, 3-layer slippage engine, intrabar SL/TP, and risk guardrails."""
 
 from __future__ import annotations
 
 import math
 import statistics
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 from .config import (
+    ASSETS,
     BASE_SLIPPAGE_RATE,
     BREAKEVEN_TRIGGER_PCT,
     DAILY_LOSS_LIMIT_PCT,
-    FEE_RATE,
-    INITIAL_CAPITAL_KRW,
     KST,
     MAX_POSITION_RATIO,
     MAX_TOTAL_SLIPPAGE_RATE,
     MAX_VOL_SLIPPAGE_RATE,
-    MIN_ORDER_KRW,
     MIN_ORDER_PCT,
     STOP_LOSS_EXTRA_SLIPPAGE_RATE,
     TAKE_PROFIT_SLIPPAGE_RATE,
     VOL_SLIPPAGE_ATR_THRESHOLD_PCT,
     VOL_SLIPPAGE_PER_ATR_PCT,
+    AssetConfig,
 )
 from .market_data import Candle, MarketSnapshot
-from .strategy import TradingDecision
+from .strategy import TradingDecision, format_price
 
 
-def create_initial_state(snapshot: MarketSnapshot) -> dict[str, Any]:
+def create_initial_state(snapshot: MarketSnapshot, asset: AssetConfig | None = None) -> dict[str, Any]:
+    cfg = asset or ASSETS["sol"]
     now_kst_date = snapshot.fetched_at_kst[:10]
     spot = snapshot.spot_price
-    bm_fee = INITIAL_CAPITAL_KRW * FEE_RATE
-    bm_sol_qty = (INITIAL_CAPITAL_KRW - bm_fee) / spot if spot > 0 else 0.0
+    initial = cfg.initial_capital
+    bm_fee = initial * cfg.buy_fee_rate
+    bm_qty = (initial - bm_fee) / spot if spot > 0 else 0.0
 
     return {
-        "version": 1,
+        "version": 2,
+        "asset_id": cfg.asset_id,
+        "symbol": cfg.symbol,
+        "quote_currency": cfg.quote_currency,
         "started_at_kst": snapshot.fetched_at_kst,
         "started_at_utc": snapshot.fetched_at_utc,
         "last_run_kst": None,
         "last_run_utc": None,
         "last_run_ts_ms": 0,
         "run_count": 0,
-        "initial_capital_krw": INITIAL_CAPITAL_KRW,
-        "cash_krw": INITIAL_CAPITAL_KRW,
+        "initial_capital_krw": initial,
+        "cash_krw": initial,
         "sol_qty": 0.0,
         "avg_entry_price": 0.0,
         "entry_time_kst": None,
@@ -53,14 +57,14 @@ def create_initial_state(snapshot: MarketSnapshot) -> dict[str, Any]:
         "cumulative_fees_krw": 0.0,
         "cumulative_slippage_krw": 0.0,
         "realized_pnl_krw": 0.0,
-        "peak_equity_krw": INITIAL_CAPITAL_KRW,
+        "peak_equity_krw": initial,
         "max_drawdown_pct": 0.0,
         "daily_ref_date_kst": now_kst_date,
-        "daily_start_equity_krw": INITIAL_CAPITAL_KRW,
+        "daily_start_equity_krw": initial,
         "daily_circuit_breaker_active": False,
         "benchmark": {
             "initial_price_krw": spot,
-            "sol_qty": bm_sol_qty,
+            "sol_qty": bm_qty,
             "initial_fee_krw": bm_fee,
         },
         "stats": {
@@ -78,57 +82,53 @@ def create_initial_state(snapshot: MarketSnapshot) -> dict[str, Any]:
 
 def _walk_orderbook_buy_vwap(
     asks: tuple[tuple[float, float], ...],
-    krw_notional: float,
+    quote_notional: float,
 ) -> float | None:
-    """Walk live Upbit ask levels to estimate VWAP execution price for a KRW market buy."""
-    if not asks or krw_notional <= 0:
+    if not asks or quote_notional <= 0:
         return None
-    remaining_krw = krw_notional
+    remaining = quote_notional
     total_qty = 0.0
-    for price, size_sol in asks:
-        if price <= 0 or size_sol <= 0:
+    for price, size in asks:
+        if price <= 0 or size <= 0:
             continue
-        level_krw = price * size_sol
-        if level_krw >= remaining_krw:
-            total_qty += remaining_krw / price
-            remaining_krw = 0.0
+        level_val = price * size
+        if level_val >= remaining:
+            total_qty += remaining / price
+            remaining = 0.0
             break
-        total_qty += size_sol
-        remaining_krw -= level_krw
+        total_qty += size
+        remaining -= level_val
 
-    if remaining_krw > 0:
-        # Order exceeds top-15 depth; fill remainder at worst ask + 10 bps penalty
+    if remaining > 0:
         tail_price = asks[-1][0] * 1.0010
-        total_qty += remaining_krw / tail_price
+        total_qty += remaining / tail_price
 
-    return (krw_notional / total_qty) if total_qty > 0 else None
+    return (quote_notional / total_qty) if total_qty > 0 else None
 
 
 def _walk_orderbook_sell_vwap(
     bids: tuple[tuple[float, float], ...],
-    sol_qty: float,
+    qty: float,
 ) -> float | None:
-    """Walk live Upbit bid levels to estimate VWAP execution price for a SOL market sell."""
-    if not bids or sol_qty <= 0:
+    if not bids or qty <= 0:
         return None
-    remaining_qty = sol_qty
-    total_krw = 0.0
-    for price, size_sol in bids:
-        if price <= 0 or size_sol <= 0:
+    remaining_qty = qty
+    total_val = 0.0
+    for price, size in bids:
+        if price <= 0 or size <= 0:
             continue
-        if size_sol >= remaining_qty:
-            total_krw += remaining_qty * price
+        if size >= remaining_qty:
+            total_val += remaining_qty * price
             remaining_qty = 0.0
             break
-        total_krw += size_sol * price
-        remaining_qty -= size_sol
+        total_val += size * price
+        remaining_qty -= size
 
     if remaining_qty > 0:
-        # Order exceeds top-15 depth; fill remainder at worst bid - 10 bps penalty
         tail_price = bids[-1][0] * 0.9990
-        total_krw += remaining_qty * tail_price
+        total_val += remaining_qty * tail_price
 
-    return (total_krw / sol_qty) if sol_qty > 0 else None
+    return (total_val / qty) if qty > 0 else None
 
 
 def estimate_execution_slippage(
@@ -141,24 +141,23 @@ def estimate_execution_slippage(
     trigger: str = "quant_shortterm",
     orderbook_asks: tuple[tuple[float, float], ...] = (),
     orderbook_bids: tuple[tuple[float, float], ...] = (),
+    base_slippage_rate: float = BASE_SLIPPAGE_RATE,
+    quote_currency: str = "KRW",
 ) -> tuple[float, dict[str, float]]:
     """Compute realistic execution slippage rate combining orderbook depth, ATR volatility, and trigger type."""
     if ref_price <= 0:
-        return BASE_SLIPPAGE_RATE, {"book_bps": round(BASE_SLIPPAGE_RATE * 10_000.0, 2), "vol_bps": 0.0, "event_bps": 0.0}
+        return base_slippage_rate, {"book_bps": round(base_slippage_rate * 10_000.0, 2), "vol_bps": 0.0, "event_bps": 0.0}
 
-    # Limit-style intrabar take-profit rests on the book with minimal slippage
     if trigger == "take_profit":
         rate = TAKE_PROFIT_SLIPPAGE_RATE
         return rate, {"book_bps": 0.0, "vol_bps": 0.0, "event_bps": round(rate * 10_000.0, 2)}
 
     half_spread = max(0.0, spread_bps) / 2.0 / 10_000.0
-    floor_book_rate = max(BASE_SLIPPAGE_RATE, half_spread)
+    floor_book_rate = max(base_slippage_rate, half_spread)
 
-    # Volatility / latency drift surcharge based on 1h ATR(14)%
     vol_excess = max(0.0, atr14_pct - VOL_SLIPPAGE_ATR_THRESHOLD_PCT)
     vol_rate = min(MAX_VOL_SLIPPAGE_RATE, vol_excess * VOL_SLIPPAGE_PER_ATR_PCT)
 
-    # Intrabar stop-loss executes during sharp downward sweeps -> extra panic-sweep slippage
     if trigger == "stop_loss":
         event_rate = STOP_LOSS_EXTRA_SLIPPAGE_RATE
         total_rate = min(MAX_TOTAL_SLIPPAGE_RATE, floor_book_rate + (vol_rate * 1.5) + event_rate)
@@ -168,7 +167,6 @@ def estimate_execution_slippage(
             "event_bps": round(event_rate * 10_000.0, 2),
         }
 
-    # Scheduled market order: walk live orderbook ladder when available
     book_rate = floor_book_rate
     if side == "BUY" and orderbook_asks:
         vwap = _walk_orderbook_buy_vwap(orderbook_asks, order_krw)
@@ -179,10 +177,11 @@ def estimate_execution_slippage(
         vwap = _walk_orderbook_sell_vwap(orderbook_bids, est_qty)
         if vwap is not None and vwap < ref_price:
             book_rate = max(floor_book_rate, (ref_price - vwap) / ref_price)
-    elif order_krw > 1_000_000.0:
-        # Fallback size-impact estimate when live orderbook ladder is unavailable (+0.5 bps per 100만 원 above 100만 원)
-        size_impact = min(0.0010, ((order_krw - 1_000_000.0) / 1_000_000.0) * 0.00005)
-        book_rate = floor_book_rate + size_impact
+    else:
+        threshold = 1_000_000.0 if quote_currency == "KRW" else 1_000.0
+        if order_krw > threshold:
+            size_impact = min(0.0010, ((order_krw - threshold) / threshold) * 0.00005)
+            book_rate = floor_book_rate + size_impact
 
     total_rate = min(MAX_TOTAL_SLIPPAGE_RATE, book_rate + vol_rate)
     return total_rate, {
@@ -193,7 +192,6 @@ def estimate_execution_slippage(
 
 
 def effective_slippage_rate(spread_bps: float) -> float:
-    """Backward-compatible helper returning base half-spread slippage rate."""
     half_spread = max(0.0, spread_bps) / 2.0 / 10_000.0
     return max(BASE_SLIPPAGE_RATE, half_spread)
 
@@ -208,7 +206,6 @@ def benchmark_equity(state: dict[str, Any], spot_price: float) -> float:
 
 
 def refresh_daily_guardrails(state: dict[str, Any], spot_price: float, now_kst_str: str) -> None:
-    """Roll over KST daily reference equity at midnight and check -5% daily circuit breaker."""
     today_kst = now_kst_str[:10]
     eq = portfolio_equity(state, spot_price)
 
@@ -225,9 +222,17 @@ def refresh_daily_guardrails(state: dict[str, Any], spot_price: float, now_kst_s
             state["daily_circuit_breaker_active"] = True
 
 
+def _quantize_qty(raw_qty: float, cfg: AssetConfig) -> float:
+    if not cfg.allow_fractional:
+        return float(math.floor(max(0.0, raw_qty)))
+    factor = 10 ** max(cfg.qty_decimals, 2)
+    return math.floor(max(0.0, raw_qty) * factor) / factor
+
+
 def _record_sell_execution(
     state: dict[str, Any],
     *,
+    asset: AssetConfig,
     sell_qty: float,
     ref_price: float,
     spread_bps: float,
@@ -240,7 +245,10 @@ def _record_sell_execution(
     reason: str,
 ) -> dict[str, Any] | None:
     held_qty = float(state["sol_qty"])
-    qty = min(held_qty, max(0.0, sell_qty))
+    is_full_exit = sell_qty >= held_qty * 0.99
+    qty = held_qty if is_full_exit else _quantize_qty(min(held_qty, max(0.0, sell_qty)), asset)
+    if not asset.allow_fractional and qty < 1.0 and held_qty >= 1.0:
+        qty = 1.0 if not is_full_exit else held_qty
     if qty <= 1e-9:
         return None
 
@@ -252,15 +260,17 @@ def _record_sell_execution(
         atr14_pct=atr14_pct,
         trigger=trigger,
         orderbook_bids=orderbook_bids,
+        base_slippage_rate=asset.base_slippage_rate,
+        quote_currency=asset.quote_currency,
     )
     exec_price = ref_price * (1.0 - slip_rate)
-    gross_krw = qty * exec_price
-    if gross_krw < MIN_ORDER_KRW and qty < held_qty * 0.99:
+    gross_val = qty * exec_price
+    if gross_val < asset.min_order_value and not is_full_exit:
         return None
 
-    slippage_krw = qty * max(0.0, ref_price - exec_price)
-    fee_krw = gross_krw * FEE_RATE
-    net_proceeds = gross_krw - fee_krw
+    slippage_cost = qty * max(0.0, ref_price - exec_price)
+    fee_cost = gross_val * asset.sell_fee_rate
+    net_proceeds = gross_val - fee_cost
     avg_entry = float(state["avg_entry_price"])
     cost_basis = qty * avg_entry
     realized_pnl = net_proceeds - cost_basis
@@ -268,8 +278,8 @@ def _record_sell_execution(
 
     state["cash_krw"] = float(state["cash_krw"]) + net_proceeds
     remaining_qty = held_qty - qty
-    if remaining_qty * ref_price < 1_000.0 or remaining_qty <= 1e-8:
-        # Dust cleanup: close out completely
+    dust_threshold = 1_000.0 if asset.quote_currency == "KRW" else 5.0
+    if remaining_qty * ref_price < dust_threshold or remaining_qty <= 1e-8 or (not asset.allow_fractional and remaining_qty < 1.0):
         remaining_qty = 0.0
         state["avg_entry_price"] = 0.0
         state["entry_time_kst"] = None
@@ -278,8 +288,8 @@ def _record_sell_execution(
         state["highest_price_since_entry"] = None
     state["sol_qty"] = remaining_qty
 
-    state["cumulative_fees_krw"] = float(state["cumulative_fees_krw"]) + fee_krw
-    state["cumulative_slippage_krw"] = float(state.get("cumulative_slippage_krw", 0.0)) + slippage_krw
+    state["cumulative_fees_krw"] = float(state["cumulative_fees_krw"]) + fee_cost
+    state["cumulative_slippage_krw"] = float(state.get("cumulative_slippage_krw", 0.0)) + slippage_cost
     state["realized_pnl_krw"] = float(state["realized_pnl_krw"]) + realized_pnl
 
     stats = state["stats"]
@@ -293,6 +303,7 @@ def _record_sell_execution(
         stats["losing_trades"] += 1
         stats["gross_loss_krw"] += abs(realized_pnl)
 
+    val_dec = asset.price_decimals
     return {
         "id": f"T{stats['total_trades']:04d}",
         "time_kst": timestamp_kst,
@@ -300,15 +311,15 @@ def _record_sell_execution(
         "side": "SELL",
         "trigger": trigger,
         "engine": engine,
-        "spot_price": round(ref_price, 2),
-        "exec_price": round(exec_price, 2),
+        "spot_price": round(ref_price, max(2, val_dec)),
+        "exec_price": round(exec_price, max(2, val_dec)),
         "slippage_bps": round(slip_rate * 10_000.0, 2),
-        "slippage_krw": round(slippage_krw, 0),
+        "slippage_krw": round(slippage_cost, val_dec),
         "slippage_breakdown": slip_breakdown,
-        "sol_qty": round(qty, 6),
-        "krw_amount": round(gross_krw, 0),
-        "fee_krw": round(fee_krw, 0),
-        "realized_pnl_krw": round(realized_pnl, 0),
+        "sol_qty": round(qty, 6 if asset.allow_fractional else 0),
+        "krw_amount": round(gross_val, val_dec),
+        "fee_krw": round(fee_cost, val_dec),
+        "realized_pnl_krw": round(realized_pnl, val_dec),
         "realized_pnl_pct": round(realized_pnl_pct, 2),
         "reason": reason,
     }
@@ -317,6 +328,7 @@ def _record_sell_execution(
 def _record_buy_execution(
     state: dict[str, Any],
     *,
+    asset: AssetConfig,
     krw_budget: float,
     spot_price: float,
     spread_bps: float,
@@ -332,35 +344,58 @@ def _record_buy_execution(
 ) -> dict[str, Any] | None:
     cash = float(state["cash_krw"])
     eq = portfolio_equity(state, spot_price)
-    current_sol_val = float(state["sol_qty"]) * spot_price
-    max_sol_val = eq * MAX_POSITION_RATIO
-    room_krw = max(0.0, max_sol_val - current_sol_val)
+    current_val = float(state["sol_qty"]) * spot_price
+    max_val = eq * MAX_POSITION_RATIO
+    room = max(0.0, max_val - current_val)
 
-    spend_total = min(cash, krw_budget, room_krw)
-    if spend_total < MIN_ORDER_KRW:
+    spend_budget = min(cash, krw_budget, room)
+    if spend_budget < asset.min_order_value:
         return None
 
     slip_rate, slip_breakdown = estimate_execution_slippage(
         side="BUY",
         ref_price=spot_price,
-        order_krw=spend_total,
+        order_krw=spend_budget,
         spread_bps=spread_bps,
         atr14_pct=atr14_pct,
         trigger=trigger,
         orderbook_asks=orderbook_asks,
+        base_slippage_rate=asset.base_slippage_rate,
+        quote_currency=asset.quote_currency,
     )
     exec_price = spot_price * (1.0 + slip_rate)
-    fee_krw = spend_total * FEE_RATE
-    net_krw = spend_total - fee_krw
-    bought_qty = net_krw / exec_price
-    slippage_krw = bought_qty * max(0.0, exec_price - spot_price)
+
+    if asset.allow_fractional:
+        spend_total = spend_budget
+        fee_cost = spend_total * asset.buy_fee_rate
+        net_spend = spend_total - fee_cost
+        bought_qty = net_spend / exec_price
+        if asset.qty_decimals <= 2:
+            bought_qty = _quantize_qty(bought_qty, asset)
+            if bought_qty <= 0:
+                return None
+            net_spend = bought_qty * exec_price
+            fee_cost = net_spend * asset.buy_fee_rate
+            spend_total = net_spend + fee_cost
+    else:
+        # Integer share market (e.g., KRX SK Hynix): buy whole shares within budget
+        max_shares = math.floor(spend_budget / (exec_price * (1.0 + asset.buy_fee_rate)))
+        if max_shares < 1:
+            return None
+        bought_qty = float(max_shares)
+        net_spend = bought_qty * exec_price
+        fee_cost = net_spend * asset.buy_fee_rate
+        spend_total = net_spend + fee_cost
+        if spend_total > cash:
+            return None
+
+    slippage_cost = bought_qty * max(0.0, exec_price - spot_price)
 
     prev_qty = float(state["sol_qty"])
     prev_avg = float(state["avg_entry_price"])
     new_qty = prev_qty + bought_qty
-    # Include entry fee in effective cost basis for honest realized PnL
-    effective_cost_per_sol = spend_total / bought_qty
-    new_avg = ((prev_qty * prev_avg) + (bought_qty * effective_cost_per_sol)) / new_qty if new_qty > 0 else exec_price
+    effective_cost_per_unit = spend_total / bought_qty
+    new_avg = ((prev_qty * prev_avg) + (bought_qty * effective_cost_per_unit)) / new_qty if new_qty > 0 else exec_price
 
     state["cash_krw"] = cash - spend_total
     state["sol_qty"] = new_qty
@@ -372,15 +407,17 @@ def _record_buy_execution(
         prev_high = float(state.get("highest_price_since_entry") or spot_price)
         state["highest_price_since_entry"] = max(prev_high, spot_price)
 
-    state["stop_loss_price"] = round(new_avg * (1.0 - stop_loss_pct / 100.0), 1)
-    state["take_profit_price"] = round(new_avg * (1.0 + take_profit_pct / 100.0), 1)
-    state["cumulative_fees_krw"] = float(state["cumulative_fees_krw"]) + fee_krw
-    state["cumulative_slippage_krw"] = float(state.get("cumulative_slippage_krw", 0.0)) + slippage_krw
+    price_dec = max(1, asset.price_decimals)
+    state["stop_loss_price"] = round(new_avg * (1.0 - stop_loss_pct / 100.0), price_dec)
+    state["take_profit_price"] = round(new_avg * (1.0 + take_profit_pct / 100.0), price_dec)
+    state["cumulative_fees_krw"] = float(state["cumulative_fees_krw"]) + fee_cost
+    state["cumulative_slippage_krw"] = float(state.get("cumulative_slippage_krw", 0.0)) + slippage_cost
 
     stats = state["stats"]
     stats["total_trades"] += 1
     stats["buy_trades"] += 1
 
+    val_dec = asset.price_decimals
     return {
         "id": f"T{stats['total_trades']:04d}",
         "time_kst": timestamp_kst,
@@ -388,14 +425,14 @@ def _record_buy_execution(
         "side": "BUY",
         "trigger": trigger,
         "engine": engine,
-        "spot_price": round(spot_price, 2),
-        "exec_price": round(exec_price, 2),
+        "spot_price": round(spot_price, max(2, val_dec)),
+        "exec_price": round(exec_price, max(2, val_dec)),
         "slippage_bps": round(slip_rate * 10_000.0, 2),
-        "slippage_krw": round(slippage_krw, 0),
+        "slippage_krw": round(slippage_cost, val_dec),
         "slippage_breakdown": slip_breakdown,
-        "sol_qty": round(bought_qty, 6),
-        "krw_amount": round(spend_total, 0),
-        "fee_krw": round(fee_krw, 0),
+        "sol_qty": round(bought_qty, 6 if asset.allow_fractional else 0),
+        "krw_amount": round(spend_total, val_dec),
+        "fee_krw": round(fee_cost, val_dec),
         "realized_pnl_krw": None,
         "realized_pnl_pct": None,
         "reason": reason,
@@ -407,9 +444,10 @@ def check_intrabar_triggers(
     snapshot: MarketSnapshot,
     *,
     atr14_pct: float = 1.0,
+    asset: AssetConfig | None = None,
 ) -> dict[str, Any] | None:
-    """Check if Stop-Loss or Take-Profit was touched between the last run and now."""
-    if float(state["sol_qty"]) <= 1e-8:
+    cfg = asset or ASSETS["sol"]
+    if not snapshot.market_open or float(state["sol_qty"]) <= 1e-8:
         return None
 
     sl = state.get("stop_loss_price")
@@ -434,10 +472,10 @@ def check_intrabar_triggers(
     prev_high = float(state.get("highest_price_since_entry") or snapshot.spot_price)
     state["highest_price_since_entry"] = max(prev_high, high_seen)
 
-    # Conservative assumption: if both SL and TP were hit inside the same bar, assume SL hit first
     if sl is not None and low_seen <= float(sl):
         return _record_sell_execution(
             state,
+            asset=cfg,
             sell_qty=float(state["sol_qty"]),
             ref_price=float(sl),
             spread_bps=snapshot.spread_bps,
@@ -447,12 +485,13 @@ def check_intrabar_triggers(
             timestamp_utc=snapshot.fetched_at_utc,
             trigger="stop_loss",
             engine="risk_guardrail",
-            reason=f"장중 손절가({round(float(sl)):,}원) 터치(저가 {round(low_seen):,}원)로 자동 전량 청산",
+            reason=f"장중 손절가({format_price(float(sl), cfg)}) 터치(저가 {format_price(low_seen, cfg)})로 자동 전량 청산",
         )
 
     if tp is not None and high_seen >= float(tp):
         return _record_sell_execution(
             state,
+            asset=cfg,
             sell_qty=float(state["sol_qty"]),
             ref_price=float(tp),
             spread_bps=snapshot.spread_bps,
@@ -462,7 +501,7 @@ def check_intrabar_triggers(
             timestamp_utc=snapshot.fetched_at_utc,
             trigger="take_profit",
             engine="risk_guardrail",
-            reason=f"장중 익절가({round(float(tp)):,}원) 도달(고가 {round(high_seen):,}원)로 자동 전량 익절",
+            reason=f"장중 익절가({format_price(float(tp), cfg)}) 도달(고가 {format_price(high_seen, cfg)})로 자동 전량 익절",
         )
 
     return None
@@ -487,29 +526,29 @@ def build_portfolio_context(
     same_candle_buy_blocked: bool = False,
 ) -> dict[str, Any]:
     eq = portfolio_equity(state, spot_price)
-    sol_qty = float(state["sol_qty"])
-    sol_val = sol_qty * spot_price
-    exposure_pct = (sol_val / eq * 100.0) if eq > 0 else 0.0
+    held_qty = float(state["sol_qty"])
+    held_val = held_qty * spot_price
+    exposure_pct = (held_val / eq * 100.0) if eq > 0 else 0.0
     avg_entry = float(state["avg_entry_price"])
-    unrealized_krw = (spot_price - avg_entry) * sol_qty if sol_qty > 1e-8 and avg_entry > 0 else 0.0
-    unrealized_pct = ((spot_price / avg_entry) - 1.0) * 100.0 if sol_qty > 1e-8 and avg_entry > 0 else 0.0
+    unrealized_val = (spot_price - avg_entry) * held_qty if held_qty > 1e-8 and avg_entry > 0 else 0.0
+    unrealized_pct = ((spot_price / avg_entry) - 1.0) * 100.0 if held_qty > 1e-8 and avg_entry > 0 else 0.0
 
     holding_hours = 0.0
-    if sol_qty > 1e-8 and state.get("entry_time_kst") and now_kst_str:
+    if held_qty > 1e-8 and state.get("entry_time_kst") and now_kst_str:
         entry_dt = _parse_kst_str(state.get("entry_time_kst"))
         now_dt = _parse_kst_str(now_kst_str)
         if entry_dt is not None and now_dt is not None and now_dt > entry_dt:
             holding_hours = round((now_dt - entry_dt).total_seconds() / 3600.0, 2)
 
     return {
-        "total_equity_krw": round(eq, 0),
-        "cash_krw": round(float(state["cash_krw"]), 0),
-        "sol_qty": round(sol_qty, 6),
-        "sol_value_krw": round(sol_val, 0),
+        "total_equity_krw": round(eq, 2),
+        "cash_krw": round(float(state["cash_krw"]), 2),
+        "sol_qty": round(held_qty, 6),
+        "sol_value_krw": round(held_val, 2),
         "exposure_pct": round(exposure_pct, 2),
         "max_allowed_exposure_pct": round(MAX_POSITION_RATIO * 100.0, 1),
-        "avg_entry_price_krw": round(avg_entry, 1),
-        "unrealized_pnl_krw": round(unrealized_krw, 0),
+        "avg_entry_price_krw": round(avg_entry, 2),
+        "unrealized_pnl_krw": round(unrealized_val, 2),
         "unrealized_pnl_pct": round(unrealized_pct, 2),
         "holding_hours": holding_hours,
         "stop_loss_price_krw": state.get("stop_loss_price"),
@@ -528,9 +567,13 @@ def execute_decision(
     sl_cooldown_active: bool = False,
     atr14_pct: float = 1.0,
     same_candle_buy_blocked: bool = False,
+    asset: AssetConfig | None = None,
 ) -> tuple[dict[str, Any] | None, str | None]:
-    """Apply hard guardrails and execute paper BUY/SELL/HOLD. Returns (trade_record, guardrail_note)."""
+    cfg = asset or ASSETS["sol"]
     spot = snapshot.spot_price
+
+    if not snapshot.market_open:
+        return None, None
 
     if decision.action == "BUY":
         if state.get("daily_circuit_breaker_active"):
@@ -545,6 +588,7 @@ def execute_decision(
         budget = float(state["cash_krw"]) * (decision.order_pct / 100.0)
         trade = _record_buy_execution(
             state,
+            asset=cfg,
             krw_budget=budget,
             spot_price=spot,
             spread_bps=snapshot.spread_bps,
@@ -559,18 +603,19 @@ def execute_decision(
             reason=decision.headline,
         )
         if trade is None:
-            return None, f"최대 포지션 한도({int(MAX_POSITION_RATIO * 100)}%) 또는 최소 주문 금액({int(MIN_ORDER_KRW):,}원) 제약으로 매수 미체결"
+            return None, f"최대 포지션 한도({int(MAX_POSITION_RATIO * 100)}%) 또는 최소 주문 단위 제약으로 매수 미체결"
         return trade, None
 
     if decision.action == "SELL":
         if float(state["sol_qty"]) <= 1e-8:
-            return None, "보유 SOL 수량이 없어 매도 스킵"
+            return None, f"보유 {cfg.short_name} 수량이 없어 매도 스킵"
         if decision.order_pct < MIN_ORDER_PCT:
             return None, f"매도 비중({decision.order_pct:.1f}%)이 최소 임계치 미만으로 스킵"
 
         sell_qty = float(state["sol_qty"]) * (decision.order_pct / 100.0)
         trade = _record_sell_execution(
             state,
+            asset=cfg,
             sell_qty=sell_qty,
             ref_price=spot,
             spread_bps=snapshot.spread_bps,
@@ -583,7 +628,7 @@ def execute_decision(
             reason=decision.headline,
         )
         if trade is None:
-            return None, f"최소 주문 금액({int(MIN_ORDER_KRW):,}원) 미만으로 매도 미체결"
+            return None, "최소 주문 단위 미만으로 매도 미체결"
         return trade, None
 
     # HOLD: Short-term Breakeven + Trailing Stop-Loss Protection
@@ -592,8 +637,9 @@ def execute_decision(
         if avg_entry > 0:
             unrealized_pct = ((spot / avg_entry) - 1.0) * 100.0
             if unrealized_pct >= BREAKEVEN_TRIGGER_PCT:
-                breakeven_floor = round(avg_entry * 1.003, 1)  # Entry + round-trip cost buffer
-                trailing_sl = round(spot * (1.0 - (decision.stop_loss_pct * 0.7) / 100.0), 1)
+                price_dec = max(1, cfg.price_decimals)
+                breakeven_floor = round(avg_entry * 1.003, price_dec)
+                trailing_sl = round(spot * (1.0 - (decision.stop_loss_pct * 0.7) / 100.0), price_dec)
                 proposed_sl = max(breakeven_floor, trailing_sl)
                 if proposed_sl > float(state["stop_loss_price"]) and proposed_sl < spot:
                     state["stop_loss_price"] = proposed_sl
@@ -604,8 +650,12 @@ def finalize_cycle_metrics(
     state: dict[str, Any],
     snapshot: MarketSnapshot,
     history: list[dict[str, Any]],
+    *,
+    asset: AssetConfig | None = None,
+    increment_run: bool = True,
 ) -> dict[str, Any]:
-    """Update peak equity / MDD and compute summary performance analytics."""
+    cfg = asset or ASSETS["sol"]
+    val_dec = cfg.price_decimals
     spot = snapshot.spot_price
     eq = portfolio_equity(state, spot)
     bm_eq = benchmark_equity(state, spot)
@@ -622,17 +672,18 @@ def finalize_cycle_metrics(
     state["last_run_kst"] = snapshot.fetched_at_kst
     state["last_run_utc"] = snapshot.fetched_at_utc
     state["last_run_ts_ms"] = int(now_dt.timestamp() * 1000)
-    state["run_count"] = int(state.get("run_count", 0)) + 1
+    if increment_run:
+        state["run_count"] = int(state.get("run_count", 0)) + 1
 
     total_return_pct = ((eq / initial) - 1.0) * 100.0 if initial > 0 else 0.0
     bm_return_pct = ((bm_eq / initial) - 1.0) * 100.0 if initial > 0 else 0.0
     alpha_pp = total_return_pct - bm_return_pct
 
-    sol_qty = float(state["sol_qty"])
-    sol_val = sol_qty * spot
+    held_qty = float(state["sol_qty"])
+    held_val = held_qty * spot
     avg_entry = float(state["avg_entry_price"])
-    unrealized_krw = (spot - avg_entry) * sol_qty if sol_qty > 1e-8 and avg_entry > 0 else 0.0
-    unrealized_pct = ((spot / avg_entry) - 1.0) * 100.0 if sol_qty > 1e-8 and avg_entry > 0 else 0.0
+    unrealized_val = (spot - avg_entry) * held_qty if held_qty > 1e-8 and avg_entry > 0 else 0.0
+    unrealized_pct = ((spot / avg_entry) - 1.0) * 100.0 if held_qty > 1e-8 and avg_entry > 0 else 0.0
 
     stats = state["stats"]
     closed = int(stats["closed_trades"])
@@ -647,8 +698,7 @@ def finalize_cycle_metrics(
     else:
         profit_factor = None
 
-    # Annualized Sharpe Ratio from hourly equity series (once >= 12 hourly returns exist)
-    equities = [float(h["equity_krw"]) for h in history[-720:]] + [eq]
+    equities = [float(h["equity_krw"]) for h in history[-720:]] + ([eq] if increment_run else [])
     sharpe_ratio: float | None = None
     if len(equities) >= 13:
         rets = [
@@ -660,7 +710,8 @@ def finalize_cycle_metrics(
             std = statistics.pstdev(rets)
             if std > 1e-12:
                 mean_r = sum(rets) / len(rets)
-                sharpe_ratio = round((mean_r / std) * math.sqrt(24.0 * 365.0), 2)
+                ann_factor = math.sqrt(24.0 * 365.0) if cfg.market_type == "crypto" else math.sqrt(7.0 * 252.0)
+                sharpe_ratio = round((mean_r / std) * ann_factor, 2)
 
     daily_ref = float(state.get("daily_start_equity_krw") or eq)
     daily_return_pct = ((eq / daily_ref) - 1.0) * 100.0 if daily_ref > 0 else 0.0
@@ -668,27 +719,27 @@ def finalize_cycle_metrics(
     cum_slip = float(state.get("cumulative_slippage_krw", 0.0))
 
     return {
-        "total_equity_krw": round(eq, 0),
-        "total_pnl_krw": round(eq - initial, 0),
+        "total_equity_krw": round(eq, val_dec),
+        "total_pnl_krw": round(eq - initial, val_dec),
         "total_return_pct": round(total_return_pct, 2),
         "daily_return_pct": round(daily_return_pct, 2),
-        "benchmark_equity_krw": round(bm_eq, 0),
+        "benchmark_equity_krw": round(bm_eq, val_dec),
         "benchmark_return_pct": round(bm_return_pct, 2),
         "alpha_pp": round(alpha_pp, 2),
-        "cash_krw": round(float(state["cash_krw"]), 0),
-        "sol_qty": round(sol_qty, 6),
-        "sol_value_krw": round(sol_val, 0),
-        "exposure_pct": round((sol_val / eq * 100.0) if eq > 0 else 0.0, 2),
-        "avg_entry_price_krw": round(avg_entry, 1),
-        "unrealized_pnl_krw": round(unrealized_krw, 0),
+        "cash_krw": round(float(state["cash_krw"]), val_dec),
+        "sol_qty": round(held_qty, 6 if cfg.allow_fractional else 0),
+        "sol_value_krw": round(held_val, val_dec),
+        "exposure_pct": round((held_val / eq * 100.0) if eq > 0 else 0.0, 2),
+        "avg_entry_price_krw": round(avg_entry, max(1, val_dec)),
+        "unrealized_pnl_krw": round(unrealized_val, val_dec),
         "unrealized_pnl_pct": round(unrealized_pct, 2),
-        "realized_pnl_krw": round(float(state["realized_pnl_krw"]), 0),
+        "realized_pnl_krw": round(float(state["realized_pnl_krw"]), val_dec),
         "stop_loss_price_krw": state.get("stop_loss_price"),
         "take_profit_price_krw": state.get("take_profit_price"),
         "entry_time_kst": state.get("entry_time_kst"),
-        "cumulative_fees_krw": round(cum_fees, 0),
-        "cumulative_slippage_krw": round(cum_slip, 0),
-        "total_trading_cost_krw": round(cum_fees + cum_slip, 0),
+        "cumulative_fees_krw": round(cum_fees, val_dec),
+        "cumulative_slippage_krw": round(cum_slip, val_dec),
+        "total_trading_cost_krw": round(cum_fees + cum_slip, val_dec),
         "max_drawdown_pct": round(float(state["max_drawdown_pct"]), 2),
         "current_drawdown_pct": round(cur_dd, 2),
         "win_rate_pct": round(win_rate, 1) if win_rate is not None else None,

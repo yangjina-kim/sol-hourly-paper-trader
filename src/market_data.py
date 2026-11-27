@@ -1,4 +1,4 @@
-"""Market data fetcher for KRW-SOL via Upbit Quotation REST API (with Bithumb fallback)."""
+"""Multi-market data fetcher: Upbit/Bithumb (KRW-SOL) & Yahoo Finance v8 Chart API (KRX 000660.KS, NASDAQ NVDA)."""
 
 from __future__ import annotations
 
@@ -10,15 +10,29 @@ import urllib.request
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
-from .config import HTTP_TIMEOUT_SECONDS, KST, MARKET
+from .config import ASSETS, CANDLE_STORE_LIMIT, HTTP_TIMEOUT_SECONDS, KST, MARKET, AssetConfig
 
 UPBIT_BASE = "https://api.upbit.com/v1"
 BITHUMB_BASE = "https://api.bithumb.com/public"
+YAHOO_HOSTS = (
+    "https://query1.finance.yahoo.com/v8/finance/chart",
+    "https://query2.finance.yahoo.com/v8/finance/chart",
+)
+
+KST_ZONE = ZoneInfo("Asia/Seoul")
+ET_ZONE = ZoneInfo("America/New_York")
 
 DEFAULT_HEADERS = {
     "Accept": "application/json",
-    "User-Agent": "sol-hourly-paper-trader/1.0 (+https://github.com/yangjina-kim/sol-hourly-paper-trader)",
+    "User-Agent": "sol-hourly-paper-trader/2.0 (+https://github.com/yangjina-kim/sol-hourly-paper-trader)",
+}
+
+YAHOO_HEADERS = {
+    "Accept": "application/json,text/plain,*/*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
 }
 
 
@@ -37,6 +51,20 @@ class Candle:
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
+    @classmethod
+    def from_dict(cls, raw: dict[str, Any]) -> "Candle":
+        return cls(
+            timestamp_ms=int(raw["timestamp_ms"]),
+            time_utc=str(raw["time_utc"]),
+            time_kst=str(raw["time_kst"]),
+            open=float(raw["open"]),
+            high=float(raw["high"]),
+            low=float(raw["low"]),
+            close=float(raw["close"]),
+            volume=float(raw["volume"]),
+            quote_volume=float(raw.get("quote_volume", float(raw["close"]) * float(raw["volume"]))),
+        )
+
 
 @dataclass(frozen=True)
 class MarketSnapshot:
@@ -46,11 +74,11 @@ class MarketSnapshot:
     fetched_at_kst: str
     spot_price: float
     change_24h_pct: float
-    change_24h_krw: float
+    change_24h_krw: float  # Absolute change in quote currency (KRW or USD)
     high_24h: float
     low_24h: float
-    volume_24h_sol: float
-    turnover_24h_krw: float
+    volume_24h_sol: float  # 24h / recent session volume in asset units
+    turnover_24h_krw: float  # 24h / recent session turnover in quote currency
     best_ask: float
     best_bid: float
     spread_bps: float
@@ -58,14 +86,87 @@ class MarketSnapshot:
     candles_1h: list[Candle]  # Completed closed 1h candles, oldest -> newest
     current_candle_1h: Candle | None  # Currently forming 1h candle
     candles_4h: list[Candle]  # 4h candles, oldest -> newest
-    orderbook_asks: tuple[tuple[float, float], ...] = ()  # [(ask_price, ask_size_sol), ...] lowest -> highest
-    orderbook_bids: tuple[tuple[float, float], ...] = ()  # [(bid_price, bid_size_sol), ...] highest -> lowest
+    orderbook_asks: tuple[tuple[float, float], ...] = ()
+    orderbook_bids: tuple[tuple[float, float], ...] = ()
+    market_open: bool = True
+    market_status_label: str = "24시간 운영 중"
 
 
-def _http_get_json(url: str, retries: int = 3, backoff: float = 1.5) -> Any:
+def is_market_open(market_type: str, now_utc: datetime | None = None) -> tuple[bool, str]:
+    """Check whether regular trading session is currently open for crypto, KRX, or NASDAQ."""
+    now = now_utc or datetime.now(timezone.utc)
+    if market_type == "crypto":
+        return True, "24시간 운영 중"
+
+    if market_type == "kr_stock":
+        now_kr = now.astimezone(KST_ZONE)
+        if now_kr.weekday() >= 5:
+            return False, "KRX 주말 휴장"
+        hm = now_kr.hour * 60 + now_kr.minute
+        # KRX regular session: 09:00 ~ 15:30 KST (allow small 5m grace after close)
+        if 9 * 60 <= hm <= 15 * 60 + 35:
+            return True, "KRX 정규장 개장"
+        return False, "KRX 장 마감 (평일 09:00~15:30 KST)"
+
+    if market_type == "us_stock":
+        now_et = now.astimezone(ET_ZONE)
+        if now_et.weekday() >= 5:
+            return False, "NASDAQ 주말 휴장"
+        hm = now_et.hour * 60 + now_et.minute
+        # NASDAQ regular session: 09:30 ~ 16:00 ET (automatic DST via ZoneInfo)
+        if 9 * 60 + 30 <= hm <= 16 * 60 + 5:
+            return True, "NASDAQ 정규장 개장"
+        return False, "NASDAQ 장 마감 (평일 09:30~16:00 ET)"
+
+    return True, "운영 중"
+
+
+def merge_candles(existing: list[Candle], incoming: list[Candle], max_len: int = CANDLE_STORE_LIMIT) -> list[Candle]:
+    """Merge persisted 1h candles with freshly fetched candles, deduplicating by timestamp_ms."""
+    by_ts: dict[int, Candle] = {c.timestamp_ms: c for c in existing}
+    for c in incoming:
+        by_ts[c.timestamp_ms] = c
+    merged = sorted(by_ts.values(), key=lambda c: c.timestamp_ms)
+    return merged[-max_len:] if len(merged) > max_len else merged
+
+
+def aggregate_candles(candles_1h: list[Candle], group_size: int = 4) -> list[Candle]:
+    """Aggregate 1h candles into higher-timeframe bars (used for stocks where Yahoo has no 4h interval)."""
+    if not candles_1h:
+        return []
+    out: list[Candle] = []
+    for i in range(0, len(candles_1h), group_size):
+        chunk = candles_1h[i : i + group_size]
+        if not chunk:
+            continue
+        vol = sum(c.volume for c in chunk)
+        qvol = sum(c.quote_volume for c in chunk)
+        out.append(
+            Candle(
+                timestamp_ms=chunk[0].timestamp_ms,
+                time_utc=chunk[0].time_utc,
+                time_kst=chunk[0].time_kst,
+                open=chunk[0].open,
+                high=max(c.high for c in chunk),
+                low=min(c.low for c in chunk),
+                close=chunk[-1].close,
+                volume=vol,
+                quote_volume=qvol,
+            )
+        )
+    return out
+
+
+def _http_get_json(
+    url: str,
+    *,
+    headers: dict[str, str] = DEFAULT_HEADERS,
+    retries: int = 3,
+    backoff: float = 1.5,
+) -> Any:
     last_err: Exception | None = None
     for attempt in range(retries):
-        req = urllib.request.Request(url, headers=DEFAULT_HEADERS, method="GET")
+        req = urllib.request.Request(url, headers=headers, method="GET")
         try:
             with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_SECONDS) as resp:
                 raw = resp.read().decode("utf-8")
@@ -100,7 +201,6 @@ def _parse_upbit_candles(rows: list[dict[str, Any]]) -> list[Candle]:
                 quote_volume=float(row["candle_acc_trade_price"]),
             )
         )
-    # Upbit returns newest-first; sort chronologically oldest -> newest
     candles.sort(key=lambda c: c.timestamp_ms)
     return candles
 
@@ -126,7 +226,7 @@ def fetch_upbit_snapshot(market: str = MARKET) -> MarketSnapshot:
     qs_m = urllib.parse.urlencode({"markets": market})
 
     raw_1h = _http_get_json(f"{UPBIT_BASE}/candles/minutes/60?{qs_1h}")
-    time.sleep(0.15)  # Respect Upbit public rate limit (10 req/sec)
+    time.sleep(0.15)
     raw_4h = _http_get_json(f"{UPBIT_BASE}/candles/minutes/240?{qs_4h}")
     time.sleep(0.15)
     raw_ticker = _http_get_json(f"{UPBIT_BASE}/ticker?{qs_m}")
@@ -154,7 +254,6 @@ def fetch_upbit_snapshot(market: str = MARKET) -> MarketSnapshot:
     mid = (best_ask + best_bid) / 2.0 if (best_ask + best_bid) > 0 else spot_price
     spread_bps = ((best_ask - best_bid) / mid * 10_000.0) if mid > 0 else 0.0
 
-    # Top-5 orderbook depth imbalance & full 15-level ladder for depth-walk slippage
     top_units = units[:5]
     bid_sum = sum(float(u["bid_size"]) for u in top_units)
     ask_sum = sum(float(u["ask_size"]) for u in top_units)
@@ -193,13 +292,14 @@ def fetch_upbit_snapshot(market: str = MARKET) -> MarketSnapshot:
         candles_4h=closed_4h if closed_4h else all_4h,
         orderbook_asks=asks,
         orderbook_bids=bids,
+        market_open=True,
+        market_status_label="24시간 운영 중",
     )
 
 
 def _parse_bithumb_candles(rows: list[list[Any]]) -> list[Candle]:
     candles: list[Candle] = []
     for row in rows:
-        # [timestamp_ms, open, close, high, low, volume]
         ts_ms = int(row[0])
         o, c, h, l, v = float(row[1]), float(row[2]), float(row[3]), float(row[4]), float(row[5])
         dt_utc = datetime.fromtimestamp(ts_ms / 1000.0, tz=timezone.utc)
@@ -253,22 +353,160 @@ def fetch_bithumb_snapshot(market: str = MARKET) -> MarketSnapshot:
         turnover_24h_krw=round(float(t.get("acc_trade_value_24H") or 0.0), 0),
         best_ask=spot_price,
         best_bid=spot_price,
-        spread_bps=4.0,
+        spread_bps=6.0,
         orderbook_imbalance=0.0,
         candles_1h=closed_1h,
         current_candle_1h=current_1h,
         candles_4h=closed_4h if closed_4h else all_4h,
+        market_open=True,
+        market_status_label="24시간 운영 중",
     )
 
 
-def fetch_market_snapshot(market: str = MARKET) -> MarketSnapshot:
-    """Fetch live KRW-SOL market snapshot from Upbit, falling back to Bithumb if needed."""
-    try:
-        return fetch_upbit_snapshot(market)
-    except Exception as upbit_err:
+def _parse_yahoo_chart(raw: dict[str, Any], asset: AssetConfig, now_utc: datetime) -> MarketSnapshot:
+    chart = (raw.get("chart") or {})
+    results = chart.get("result") or []
+    if not results:
+        raise RuntimeError(f"Yahoo Finance returned empty result for {asset.symbol}: {chart.get('error')}")
+
+    res = results[0]
+    meta = res.get("meta") or {}
+    timestamps = res.get("timestamp") or []
+    quote = ((res.get("indicators") or {}).get("quote") or [{}])[0]
+
+    opens = quote.get("open") or []
+    highs = quote.get("high") or []
+    lows = quote.get("low") or []
+    closes = quote.get("close") or []
+    vols = quote.get("volume") or []
+
+    candles: list[Candle] = []
+    for i, ts in enumerate(timestamps):
+        if ts is None:
+            continue
+        o = opens[i] if i < len(opens) else None
+        h = highs[i] if i < len(highs) else None
+        l = lows[i] if i < len(lows) else None
+        c = closes[i] if i < len(closes) else None
+        v = vols[i] if i < len(vols) else 0
+        if c is None:
+            continue
+        o_f = float(o) if o is not None else float(c)
+        h_f = float(h) if h is not None else max(o_f, float(c))
+        l_f = float(l) if l is not None else min(o_f, float(c))
+        c_f = float(c)
+        v_f = float(v) if v is not None else 0.0
+        dt_utc = datetime.fromtimestamp(int(ts), tz=timezone.utc)
+        candles.append(
+            Candle(
+                timestamp_ms=int(ts) * 1000,
+                time_utc=dt_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                time_kst=dt_utc.astimezone(KST).strftime("%Y-%m-%d %H:%M:%S KST"),
+                open=round(o_f, asset.price_decimals + 2),
+                high=round(h_f, asset.price_decimals + 2),
+                low=round(l_f, asset.price_decimals + 2),
+                close=round(c_f, asset.price_decimals + 2),
+                volume=v_f,
+                quote_volume=c_f * v_f,
+            )
+        )
+
+    candles.sort(key=lambda c: c.timestamp_ms)
+    if not candles:
+        raise RuntimeError(f"Yahoo Finance parsed zero valid candles for {asset.symbol}")
+
+    market_open, market_status_label = is_market_open(asset.market_type, now_utc)
+    if market_open:
+        closed_1h, current_1h = _split_forming_candle(candles, now_utc, interval_minutes=60)
+    else:
+        closed_1h, current_1h = candles, None
+
+    if not closed_1h:
+        closed_1h = candles
+
+    spot_price = float(meta.get("regularMarketPrice") or candles[-1].close)
+    tz_local = KST_ZONE if asset.market_type == "kr_stock" else ET_ZONE
+    prev_close_raw = meta.get("previousClose") or meta.get("regularMarketPreviousClose")
+    if prev_close_raw is not None and float(prev_close_raw) > 0:
+        prev_close = float(prev_close_raw)
+    else:
+        latest_local_date = datetime.fromtimestamp(candles[-1].timestamp_ms / 1000.0, tz=timezone.utc).astimezone(tz_local).date()
+        prev_day_candles = [
+            c
+            for c in candles
+            if datetime.fromtimestamp(c.timestamp_ms / 1000.0, tz=timezone.utc).astimezone(tz_local).date() < latest_local_date
+        ]
+        prev_close = prev_day_candles[-1].close if prev_day_candles else candles[0].open
+
+    change_abs = spot_price - prev_close
+    change_pct = ((spot_price / prev_close) - 1.0) * 100.0 if prev_close > 0 else 0.0
+
+    recent_day = candles[-8:]
+    high_day = float(meta.get("regularMarketDayHigh") or max(c.high for c in recent_day))
+    low_day = float(meta.get("regularMarketDayLow") or min(c.low for c in recent_day))
+    vol_day = float(meta.get("regularMarketVolume") or sum(c.volume for c in recent_day))
+    turnover_day = vol_day * spot_price
+
+    spread_bps = round(asset.base_slippage_rate * 2.0 * 10_000.0, 2)
+    candles_4h = aggregate_candles(closed_1h, group_size=4)
+    now_kst = now_utc.astimezone(KST)
+
+    return MarketSnapshot(
+        source="yahoo",
+        market=asset.symbol,
+        fetched_at_utc=now_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        fetched_at_kst=now_kst.strftime("%Y-%m-%d %H:%M:%S KST"),
+        spot_price=round(spot_price, asset.price_decimals + 2),
+        change_24h_pct=round(change_pct, 3),
+        change_24h_krw=round(change_abs, asset.price_decimals + 2),
+        high_24h=round(high_day, asset.price_decimals + 2),
+        low_24h=round(low_day, asset.price_decimals + 2),
+        volume_24h_sol=round(vol_day, 2),
+        turnover_24h_krw=round(turnover_day, 2),
+        best_ask=spot_price,
+        best_bid=spot_price,
+        spread_bps=spread_bps,
+        orderbook_imbalance=0.0,
+        candles_1h=closed_1h,
+        current_candle_1h=current_1h,
+        candles_4h=candles_4h,
+        market_open=market_open,
+        market_status_label=market_status_label,
+    )
+
+
+def fetch_yahoo_snapshot(asset: AssetConfig) -> MarketSnapshot:
+    now_utc = datetime.now(timezone.utc)
+    symbol = asset.yahoo_symbol or asset.symbol
+    qs = urllib.parse.urlencode({"interval": "60m", "range": "1mo", "includePrePost": "false"})
+    errors: list[str] = []
+    for host in YAHOO_HOSTS:
+        url = f"{host}/{urllib.parse.quote(symbol)}?{qs}"
         try:
-            return fetch_bithumb_snapshot(market)
-        except Exception as bithumb_err:
-            raise RuntimeError(
-                f"Both Upbit ({upbit_err}) and Bithumb ({bithumb_err}) market data fetches failed."
-            ) from bithumb_err
+            raw = _http_get_json(url, headers=YAHOO_HEADERS, retries=2, backoff=1.2)
+            return _parse_yahoo_chart(raw, asset, now_utc)
+        except Exception as exc:
+            errors.append(f"{host}: {exc}")
+            time.sleep(0.5)
+    raise RuntimeError(f"Yahoo Finance fetch failed for {symbol}: {'; '.join(errors)}")
+
+
+def fetch_market_snapshot(asset: AssetConfig | str = MARKET) -> MarketSnapshot:
+    """Fetch live market snapshot for either an AssetConfig or legacy market string ('KRW-SOL')."""
+    if isinstance(asset, str):
+        cfg = ASSETS["sol"] if asset == MARKET else next((a for a in ASSETS.values() if a.symbol == asset or a.asset_id == asset), ASSETS["sol"])
+    else:
+        cfg = asset
+
+    if cfg.market_type == "crypto":
+        try:
+            return fetch_upbit_snapshot(cfg.symbol)
+        except Exception as upbit_err:
+            try:
+                return fetch_bithumb_snapshot(cfg.symbol)
+            except Exception as bithumb_err:
+                raise RuntimeError(
+                    f"Both Upbit ({upbit_err}) and Bithumb ({bithumb_err}) market data fetches failed."
+                ) from bithumb_err
+
+    return fetch_yahoo_snapshot(cfg)
