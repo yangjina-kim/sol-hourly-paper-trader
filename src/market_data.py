@@ -363,6 +363,79 @@ def fetch_bithumb_snapshot(market: str = MARKET) -> MarketSnapshot:
     )
 
 
+def _build_stock_snapshot_from_candles(
+    candles: list[Candle],
+    asset: AssetConfig,
+    now_utc: datetime,
+    *,
+    meta: dict[str, Any] | None = None,
+    source: str = "yahoo",
+) -> MarketSnapshot:
+    meta = meta or {}
+    candles = sorted(candles, key=lambda c: c.timestamp_ms)
+    if not candles:
+        raise RuntimeError(f"Stock provider parsed zero valid candles for {asset.symbol}")
+
+    market_open, market_status_label = is_market_open(asset.market_type, now_utc)
+    if market_open:
+        closed_1h, current_1h = _split_forming_candle(candles, now_utc, interval_minutes=60)
+    else:
+        closed_1h, current_1h = candles, None
+
+    if not closed_1h:
+        closed_1h = candles
+
+    spot_price = float(meta.get("regularMarketPrice") or candles[-1].close)
+    tz_local = KST_ZONE if asset.market_type == "kr_stock" else ET_ZONE
+    prev_close_raw = meta.get("previousClose") or meta.get("regularMarketPreviousClose")
+    if prev_close_raw is not None and float(prev_close_raw) > 0:
+        prev_close = float(prev_close_raw)
+    else:
+        latest_local_date = datetime.fromtimestamp(candles[-1].timestamp_ms / 1000.0, tz=timezone.utc).astimezone(tz_local).date()
+        prev_day_candles = [
+            c
+            for c in candles
+            if datetime.fromtimestamp(c.timestamp_ms / 1000.0, tz=timezone.utc).astimezone(tz_local).date() < latest_local_date
+        ]
+        prev_close = prev_day_candles[-1].close if prev_day_candles else candles[0].open
+
+    change_abs = spot_price - prev_close
+    change_pct = ((spot_price / prev_close) - 1.0) * 100.0 if prev_close > 0 else 0.0
+
+    recent_day = candles[-8:]
+    high_day = float(meta.get("regularMarketDayHigh") or max(c.high for c in recent_day))
+    low_day = float(meta.get("regularMarketDayLow") or min(c.low for c in recent_day))
+    vol_day = float(meta.get("regularMarketVolume") or sum(c.volume for c in recent_day))
+    turnover_day = vol_day * spot_price
+
+    spread_bps = round(asset.base_slippage_rate * 2.0 * 10_000.0, 2)
+    candles_4h = aggregate_candles(closed_1h, group_size=4)
+    now_kst = now_utc.astimezone(KST)
+
+    return MarketSnapshot(
+        source=source,
+        market=asset.symbol,
+        fetched_at_utc=now_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        fetched_at_kst=now_kst.strftime("%Y-%m-%d %H:%M:%S KST"),
+        spot_price=round(spot_price, asset.price_decimals + 2),
+        change_24h_pct=round(change_pct, 3),
+        change_24h_krw=round(change_abs, asset.price_decimals + 2),
+        high_24h=round(high_day, asset.price_decimals + 2),
+        low_24h=round(low_day, asset.price_decimals + 2),
+        volume_24h_sol=round(vol_day, 2),
+        turnover_24h_krw=round(turnover_day, 2),
+        best_ask=spot_price,
+        best_bid=spot_price,
+        spread_bps=spread_bps,
+        orderbook_imbalance=0.0,
+        candles_1h=closed_1h,
+        current_candle_1h=current_1h,
+        candles_4h=candles_4h,
+        market_open=market_open,
+        market_status_label=market_status_label,
+    )
+
+
 def _parse_yahoo_chart(raw: dict[str, Any], asset: AssetConfig, now_utc: datetime) -> MarketSnapshot:
     chart = (raw.get("chart") or {})
     results = chart.get("result") or []
@@ -411,75 +484,95 @@ def _parse_yahoo_chart(raw: dict[str, Any], asset: AssetConfig, now_utc: datetim
             )
         )
 
-    candles.sort(key=lambda c: c.timestamp_ms)
-    if not candles:
-        raise RuntimeError(f"Yahoo Finance parsed zero valid candles for {asset.symbol}")
+    return _build_stock_snapshot_from_candles(candles, asset, now_utc, meta=meta, source="yahoo")
 
-    market_open, market_status_label = is_market_open(asset.market_type, now_utc)
-    if market_open:
-        closed_1h, current_1h = _split_forming_candle(candles, now_utc, interval_minutes=60)
-    else:
-        closed_1h, current_1h = candles, None
 
-    if not closed_1h:
-        closed_1h = candles
+def _safe_float(val: Any) -> float | None:
+    if val is None:
+        return None
+    try:
+        f = float(val)
+        return None if (f != f) else f  # NaN check
+    except (TypeError, ValueError):
+        return None
 
-    spot_price = float(meta.get("regularMarketPrice") or candles[-1].close)
-    tz_local = KST_ZONE if asset.market_type == "kr_stock" else ET_ZONE
-    prev_close_raw = meta.get("previousClose") or meta.get("regularMarketPreviousClose")
-    if prev_close_raw is not None and float(prev_close_raw) > 0:
-        prev_close = float(prev_close_raw)
-    else:
-        latest_local_date = datetime.fromtimestamp(candles[-1].timestamp_ms / 1000.0, tz=timezone.utc).astimezone(tz_local).date()
-        prev_day_candles = [
-            c
-            for c in candles
-            if datetime.fromtimestamp(c.timestamp_ms / 1000.0, tz=timezone.utc).astimezone(tz_local).date() < latest_local_date
-        ]
-        prev_close = prev_day_candles[-1].close if prev_day_candles else candles[0].open
 
-    change_abs = spot_price - prev_close
-    change_pct = ((spot_price / prev_close) - 1.0) * 100.0 if prev_close > 0 else 0.0
+def _fetch_yfinance_snapshot(asset: AssetConfig, now_utc: datetime) -> MarketSnapshot:
+    import yfinance as yf  # Optional dependency installed in CI for reliable stock sessions
 
-    recent_day = candles[-8:]
-    high_day = float(meta.get("regularMarketDayHigh") or max(c.high for c in recent_day))
-    low_day = float(meta.get("regularMarketDayLow") or min(c.low for c in recent_day))
-    vol_day = float(meta.get("regularMarketVolume") or sum(c.volume for c in recent_day))
-    turnover_day = vol_day * spot_price
+    symbol = asset.yahoo_symbol or asset.symbol
+    ticker = yf.Ticker(symbol)
+    df = ticker.history(period="1mo", interval="60m", auto_adjust=False, prepost=False)
+    if df is None or df.empty:
+        raise RuntimeError(f"yfinance returned empty history for {symbol}")
 
-    spread_bps = round(asset.base_slippage_rate * 2.0 * 10_000.0, 2)
-    candles_4h = aggregate_candles(closed_1h, group_size=4)
-    now_kst = now_utc.astimezone(KST)
+    candles: list[Candle] = []
+    for idx, row in df.iterrows():
+        c_f = _safe_float(row.get("Close"))
+        if c_f is None or c_f <= 0:
+            continue
+        o_f = _safe_float(row.get("Open")) or c_f
+        h_f = _safe_float(row.get("High")) or max(o_f, c_f)
+        l_f = _safe_float(row.get("Low")) or min(o_f, c_f)
+        v_f = _safe_float(row.get("Volume")) or 0.0
 
-    return MarketSnapshot(
-        source="yahoo",
-        market=asset.symbol,
-        fetched_at_utc=now_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        fetched_at_kst=now_kst.strftime("%Y-%m-%d %H:%M:%S KST"),
-        spot_price=round(spot_price, asset.price_decimals + 2),
-        change_24h_pct=round(change_pct, 3),
-        change_24h_krw=round(change_abs, asset.price_decimals + 2),
-        high_24h=round(high_day, asset.price_decimals + 2),
-        low_24h=round(low_day, asset.price_decimals + 2),
-        volume_24h_sol=round(vol_day, 2),
-        turnover_24h_krw=round(turnover_day, 2),
-        best_ask=spot_price,
-        best_bid=spot_price,
-        spread_bps=spread_bps,
-        orderbook_imbalance=0.0,
-        candles_1h=closed_1h,
-        current_candle_1h=current_1h,
-        candles_4h=candles_4h,
-        market_open=market_open,
-        market_status_label=market_status_label,
-    )
+        dt = idx.to_pydatetime() if hasattr(idx, "to_pydatetime") else idx
+        if dt.tzinfo is None:
+            dt_utc = dt.replace(tzinfo=timezone.utc)
+        else:
+            dt_utc = dt.astimezone(timezone.utc)
+        ts_ms = int(dt_utc.timestamp() * 1000)
+
+        candles.append(
+            Candle(
+                timestamp_ms=ts_ms,
+                time_utc=dt_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                time_kst=dt_utc.astimezone(KST).strftime("%Y-%m-%d %H:%M:%S KST"),
+                open=round(o_f, asset.price_decimals + 2),
+                high=round(h_f, asset.price_decimals + 2),
+                low=round(l_f, asset.price_decimals + 2),
+                close=round(c_f, asset.price_decimals + 2),
+                volume=v_f,
+                quote_volume=c_f * v_f,
+            )
+        )
+
+    meta: dict[str, Any] = {}
+    try:
+        fi = ticker.fast_info
+        for src_key, dst_key in (
+            ("last_price", "regularMarketPrice"),
+            ("regular_market_previous_close", "regularMarketPreviousClose"),
+            ("previous_close", "previousClose"),
+            ("day_high", "regularMarketDayHigh"),
+            ("day_low", "regularMarketDayLow"),
+            ("last_volume", "regularMarketVolume"),
+        ):
+            try:
+                v = _safe_float(fi.get(src_key) if hasattr(fi, "get") else getattr(fi, src_key, None))
+                if v is not None and v > 0:
+                    meta[dst_key] = v
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+    return _build_stock_snapshot_from_candles(candles, asset, now_utc, meta=meta, source="yfinance")
 
 
 def fetch_yahoo_snapshot(asset: AssetConfig) -> MarketSnapshot:
     now_utc = datetime.now(timezone.utc)
     symbol = asset.yahoo_symbol or asset.symbol
-    qs = urllib.parse.urlencode({"interval": "60m", "range": "1mo", "includePrePost": "false"})
     errors: list[str] = []
+
+    try:
+        return _fetch_yfinance_snapshot(asset, now_utc)
+    except ImportError:
+        errors.append("yfinance: not installed")
+    except Exception as exc:
+        errors.append(f"yfinance: {exc}")
+
+    qs = urllib.parse.urlencode({"interval": "60m", "range": "1mo", "includePrePost": "false"})
     for host in YAHOO_HOSTS:
         url = f"{host}/{urllib.parse.quote(symbol)}?{qs}"
         try:
