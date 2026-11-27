@@ -1,0 +1,43 @@
+{
+  "version": 2,
+  "asset_id": "hynix",
+  "symbol": "000660.KS",
+  "quote_currency": "KRW",
+  "started_at_kst": "2026-11-27 17:53:35 KST",
+  "started_at_utc": "2026-11-27T08:53:35Z",
+  "last_run_kst": "2026-11-27 17:53:35 KST",
+  "last_run_utc": "2026-11-27T08:53:35Z",
+  "last_run_ts_ms": 1795769615000,
+  "run_count": 1,
+  "initial_capital_krw": 10000000.0,
+  "cash_krw": 10000000.0,
+  "sol_qty": 0.0,
+  "avg_entry_price": 0.0,
+  "entry_time_kst": null,
+  "stop_loss_price": null,
+  "take_profit_price": null,
+  "highest_price_since_entry": null,
+  "cumulative_fees_krw": 0.0,
+  "cumulative_slippage_krw": 0.0,
+  "realized_pnl_krw": 0.0,
+  "peak_equity_krw": 10000000.0,
+  "max_drawdown_pct": 0.0,
+  "daily_ref_date_kst": "2026-11-27",
+  "daily_start_equity_krw": 10000000.0,
+  "daily_circuit_breaker_active": false,
+  "benchmark": {
+    "initial_price_krw": 1103000.0,
+    "sol_qty": 9.06482320942883,
+    "initial_fee_krw": 1499.9999999999998
+  },
+  "stats": {
+    "total_trades": 0,
+    "buy_trades": 0,
+    "sell_trades": 0,
+    "closed_trades": 0,
+    "winning_trades": 0,
+    "losing_trades": 0,
+    "gross_profit_krw": 0.0,
+    "gross_loss_krw": 0.0
+  }
+}
