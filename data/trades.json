@@ -228,5 +228,28 @@
     "realized_pnl_krw": 67393.0,
     "realized_pnl_pct": 1.95,
     "reason": "단기 과열(RSI 70.5 · 수익 +2.0%) — 50% 분할 익절"
+  },
+  {
+    "id": "T0011",
+    "time_kst": "2026-11-27 15:11:05 KST",
+    "time_utc": "2026-11-27T06:11:05Z",
+    "side": "SELL",
+    "trigger": "quant_shortterm",
+    "engine": "quant-shortterm-v2",
+    "spot_price": 99150.0,
+    "exec_price": 99097.22,
+    "slippage_bps": 5.32,
+    "slippage_krw": 944.0,
+    "slippage_breakdown": {
+      "book_bps": 5.04,
+      "vol_bps": 0.28,
+      "event_bps": 0.0
+    },
+    "sol_qty": 17.889441,
+    "krw_amount": 1772794.0,
+    "fee_krw": 886.0,
+    "realized_pnl_krw": 43518.0,
+    "realized_pnl_pct": 2.52,
+    "reason": "단기 과열(RSI 72.4 · 수익 +2.6%) — 50% 분할 익절"
   }
 ]
