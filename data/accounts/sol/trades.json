@@ -343,5 +343,28 @@
     "realized_pnl_krw": 2918.0,
     "realized_pnl_pct": 2.7,
     "reason": "단기 과열(RSI 73.2 · 수익 +2.8%) — 50% 분할 익절"
+  },
+  {
+    "id": "T0016",
+    "time_kst": "2026-11-27 20:02:07 KST",
+    "time_utc": "2026-11-27T11:02:07Z",
+    "side": "SELL",
+    "trigger": "take_profit",
+    "engine": "risk_guardrail",
+    "spot_price": 99706.7,
+    "exec_price": 99696.73,
+    "slippage_bps": 1.0,
+    "slippage_krw": 11.0,
+    "slippage_breakdown": {
+      "book_bps": 0.0,
+      "vol_bps": 0.0,
+      "event_bps": 1.0
+    },
+    "sol_qty": 1.11812,
+    "krw_amount": 111473.0,
+    "fee_krw": 56.0,
+    "realized_pnl_krw": 3390.0,
+    "realized_pnl_pct": 3.14,
+    "reason": "장중 익절가(99,707원) 도달(고가 99,950원)로 자동 전량 익절"
   }
 ]
