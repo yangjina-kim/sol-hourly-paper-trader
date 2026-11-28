@@ -412,5 +412,28 @@
     "realized_pnl_krw": -14079.0,
     "realized_pnl_pct": -0.67,
     "reason": "단기 모멘텀 둔화(점수 -21.8) — 보유 비중 60% 축소"
+  },
+  {
+    "id": "T0019",
+    "time_kst": "2026-11-28 14:11:28 KST",
+    "time_utc": "2026-11-28T05:11:28Z",
+    "side": "SELL",
+    "trigger": "quant_shortterm",
+    "engine": "quant-shortterm-v2",
+    "spot_price": 96800.0,
+    "exec_price": 96748.45,
+    "slippage_bps": 5.33,
+    "slippage_krw": 740.0,
+    "slippage_breakdown": {
+      "book_bps": 5.17,
+      "vol_bps": 0.16,
+      "event_bps": 0.0
+    },
+    "sol_qty": 14.356256,
+    "krw_amount": 1388946.0,
+    "fee_krw": 694.0,
+    "realized_pnl_krw": -16532.0,
+    "realized_pnl_pct": -1.18,
+    "reason": "단기 추세 이탈(점수 -68.8) — 보유 물량 전량 청산"
   }
 ]
