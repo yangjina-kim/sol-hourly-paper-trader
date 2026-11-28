@@ -366,5 +366,28 @@
     "realized_pnl_krw": 3390.0,
     "realized_pnl_pct": 3.14,
     "reason": "장중 익절가(99,707원) 도달(고가 99,950원)로 자동 전량 익절"
+  },
+  {
+    "id": "T0017",
+    "time_kst": "2026-11-28 10:26:36 KST",
+    "time_utc": "2026-11-28T01:26:36Z",
+    "side": "BUY",
+    "trigger": "quant_shortterm",
+    "engine": "quant-shortterm-v2",
+    "spot_price": 97750.0,
+    "exec_price": 97802.74,
+    "slippage_bps": 5.4,
+    "slippage_krw": 1893.0,
+    "slippage_breakdown": {
+      "book_bps": 5.12,
+      "vol_bps": 0.28,
+      "event_bps": 0.0
+    },
+    "sol_qty": 35.890556,
+    "krw_amount": 3511951.0,
+    "fee_krw": 1756.0,
+    "realized_pnl_krw": null,
+    "realized_pnl_pct": null,
+    "reason": "단기 추세 전환(점수 +24.3) — 가용 현금 35% 분할 매수"
   }
 ]
